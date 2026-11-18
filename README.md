@@ -1,4 +1,4 @@
-# Pinterest to Plate (P2P)
+# P!nterest2Plate (P2P)
 
 > **Stop collecting. Start cooking.**  
 > An app designed to turn saved Pinterest recipe pins into actionable meal plans and 1-click shoppable supermarket baskets across the UK's leading grocers (**Tesco, Sainsbury's, Asda, Aldi, and Lidl**).
