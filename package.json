@@ -1,0 +1,20 @@
+{
+  "name": "pinterest2plate",
+  "version": "1.0.0",
+  "description": "P!nterest2Plate — Turn Pinterest recipe pins into UK supermarket grocery baskets",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "pinterest",
+    "meal-planner",
+    "grocery",
+    "supermarket",
+    "tesco",
+    "sainsburys",
+    "asda"
+  ],
+  "author": "johnaiyenuro-hash",
+  "license": "MIT"
+}
