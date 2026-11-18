@@ -8,6 +8,10 @@
       "dest": "/api/recipes.js"
     },
     {
+      "src": "/api/import",
+      "dest": "/api/import.js"
+    },
+    {
       "src": "/api/pinterest/boards",
       "dest": "/api/pinterest/boards.js"
     },

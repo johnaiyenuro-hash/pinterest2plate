@@ -638,6 +638,117 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // API: Direct Pinterest Board / Pin Import (NO API TOKEN REQUIRED)
+  if (pathname === '/api/import' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', async () => {
+      try {
+        const { url: inputUrl } = JSON.parse(body || '{}');
+        const targetUrl = (inputUrl || 'https://uk.pinterest.com/shalom_x/food').trim();
+
+        let rssUrl = targetUrl;
+        if (!rssUrl.endsWith('.rss')) {
+          let clean = targetUrl.replace(/\/+$/, '');
+          if (clean.includes('pinterest.')) {
+            rssUrl = clean + '.rss';
+          } else {
+            rssUrl = `https://uk.pinterest.com/${clean}.rss`;
+          }
+        }
+
+        console.log(`Direct Board Sync: Fetching RSS from ${rssUrl}`);
+        const parsedRssUrl = new URL(rssUrl);
+        const rssReq = https.request({
+          hostname: parsedRssUrl.hostname,
+          path: parsedRssUrl.pathname + parsedRssUrl.search,
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          }
+        }, (rssRes) => {
+          let xml = '';
+          rssRes.on('data', chunk => xml += chunk);
+          rssRes.on('end', () => {
+            if (rssRes.statusCode !== 200) {
+              res.writeHead(rssRes.statusCode, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `Pinterest returned status ${rssRes.statusCode}. Make sure the board is public.` }));
+              return;
+            }
+
+            // Parse RSS items
+            const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+            const newRecipes = [];
+            const existingIds = new Set(activeRecipes.map(r => r.id));
+
+            for (const itemXml of itemMatches) {
+              const rawTitle = (itemXml.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '';
+              const link = (itemXml.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || '';
+              const rawDesc = (itemXml.match(/<description>([\s\S]*?)<\/description>/) || [])[1] || '';
+
+              const cleanDesc = rawDesc.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'");
+              const imgMatch = cleanDesc.match(/<img[^>]+src="([^">]+)"/i);
+              let imageUrl = imgMatch ? imgMatch[1] : '';
+              if (imageUrl.includes('/236x/')) {
+                imageUrl = imageUrl.replace('/236x/', '/736x/');
+              }
+
+              const textDesc = cleanDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+              let title = rawTitle.trim();
+              if (!title || title.length < 3) {
+                title = textDesc.split('#')[0].trim();
+                if (!title) title = 'Saved Recipe Pin';
+              }
+
+              const id = 'pin_' + Math.abs(link.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0));
+
+              const recipe = {
+                id,
+                title: title.length > 70 ? title.slice(0, 67) + '...' : title,
+                creator: '@shalom_x',
+                category: guessCategory(title, textDesc),
+                tag: guessTag(title, textDesc),
+                prepTime: '25 mins',
+                servings: 4,
+                imageUrl: imageUrl || 'https://i.pinimg.com/736x/ec/1a/44/ec1a442062e322cd3ce7765206ee147a.jpg',
+                ingredients: extractIngredientsFromText(textDesc, title),
+                instructions: textDesc ? [textDesc] : ['Tap source link for step-by-step cooking instructions.']
+              };
+
+              if (!existingIds.has(id)) {
+                activeRecipes.unshift(recipe);
+                existingIds.add(id);
+                newRecipes.push(recipe);
+              }
+            }
+
+            // Persist to disk
+            fs.writeFileSync(RECIPES_FILE, JSON.stringify(activeRecipes, null, 2));
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              success: true,
+              newImported: newRecipes.length,
+              totalRecipes: activeRecipes.length,
+              recipes: activeRecipes
+            }));
+          });
+        });
+
+        rssReq.on('error', (err) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        });
+        rssReq.end();
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // API: Pinterest API - List Boards
   if (pathname === '/api/pinterest/boards' && req.method === 'POST') {
     let body = '';
