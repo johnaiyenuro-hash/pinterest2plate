@@ -720,35 +720,58 @@ export function MealPlannerApp({
 
   const handlePickFive = () => {
     const TARGET_COUNT = 5;
-    const basePool = filteredRecipes.length >= TARGET_COUNT ? filteredRecipes : readyRecipes;
-    const untriedPool = basePool.filter((r) => !madeItIds.has(r.id));
-    const pool = untriedPool.length >= TARGET_COUNT ? untriedPool : basePool;
+    const basePool = filteredRecipes.length > 0 ? filteredRecipes : readyRecipes;
+    const currentSet = new Set(selectedIds);
 
-    // Shuffle and prefer category diversity across the 5 picks
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const picked: Recipe[] = [];
-    const seenCats = new Set<string>();
+    // Strictly separate untried vs already-made so untried meals ALWAYS come first
+    const untriedFresh = basePool.filter((r) => !madeItIds.has(r.id) && !currentSet.has(r.id));
+    const untriedCurrent = basePool.filter((r) => !madeItIds.has(r.id) && currentSet.has(r.id));
+    const madeRepeats = basePool.filter((r) => madeItIds.has(r.id) && !currentSet.has(r.id));
 
-    for (const r of shuffled) {
-      if (picked.length >= TARGET_COUNT) break;
-      if (!seenCats.has(r.category)) {
-        picked.push(r);
-        seenCats.add(r.category);
+    const pickWithDiversity = (pool: Recipe[], alreadyPicked: Recipe[], limit: number) => {
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
+      const seenCats = new Set(alreadyPicked.map((p) => p.category));
+      for (const r of shuffled) {
+        if (alreadyPicked.length >= limit) break;
+        if (!seenCats.has(r.category) && !alreadyPicked.some((p) => p.id === r.id)) {
+          alreadyPicked.push(r);
+          seenCats.add(r.category);
+        }
       }
+      for (const r of shuffled) {
+        if (alreadyPicked.length >= limit) break;
+        if (!alreadyPicked.some((p) => p.id === r.id)) {
+          alreadyPicked.push(r);
+        }
+      }
+    };
+
+    const picked: Recipe[] = [];
+    // 1. Fresh untried meals you haven't picked right now
+    pickWithDiversity(untriedFresh, picked, TARGET_COUNT);
+    // 2. Any other untried meals if < 5 fresh untried exist
+    if (picked.length < TARGET_COUNT) {
+      pickWithDiversity(untriedCurrent, picked, TARGET_COUNT);
     }
-    for (const r of shuffled) {
-      if (picked.length >= TARGET_COUNT) break;
-      if (!picked.some((p) => p.id === r.id)) picked.push(r);
+    const untriedPickedCount = picked.length;
+    // 3. Only if total untried < 5, top up with already-made favourites
+    if (picked.length < TARGET_COUNT && madeRepeats.length > 0) {
+      pickWithDiversity(madeRepeats, picked, TARGET_COUNT);
     }
 
     const nextIds = picked.map((r) => r.id);
     setSelectedIds(nextIds);
     localStorage.setItem(LS_SELECTED, JSON.stringify(nextIds));
-    notify(
-      untriedPool.length >= TARGET_COUNT
-        ? `Picked ${nextIds.length} untried dishes for your week`
-        : `Picked ${nextIds.length} balanced meals for your week`,
-    );
+
+    if (untriedPickedCount === nextIds.length) {
+      notify(`Picked ${nextIds.length} new meals you haven't made yet`);
+    } else if (untriedPickedCount > 0) {
+      notify(
+        `Picked all ${untriedPickedCount} remaining new meals + ${nextIds.length - untriedPickedCount} favourites`,
+      );
+    } else {
+      notify(`You've made them all! Picked ${nextIds.length} favourites`);
+    }
   };
 
   const handleClearSelection = () => {

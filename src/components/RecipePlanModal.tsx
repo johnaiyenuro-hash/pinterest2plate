@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatScaledIngredientQty } from '@/lib/consolidate';
-import type { Recipe } from '@/lib/types';
+import type { CookingStep, Recipe } from '@/lib/types';
 
 interface RecipePlanModalProps {
   recipe: Recipe;
@@ -37,6 +37,16 @@ interface RecipePlanModalProps {
   onStartTimer: (label: string, recipeTitle: string, minutes: number) => void;
   onSaveEdits: (updated: Recipe) => Promise<void>;
   onReExtract: (recipe: Recipe) => Promise<void>;
+}
+
+function detectStepDuration(step: CookingStep): number | null {
+  if (step.durationMinutes && step.durationMinutes > 0) return step.durationMinutes;
+  const match = step.instruction.match(/(\d+)(?:\s*[-–to]+\s*\d+)?\s*(?:mins?|minutes?)/i);
+  if (match) {
+    const mins = Number(match[1]);
+    if (mins > 0 && mins <= 180) return mins;
+  }
+  return null;
 }
 
 export function RecipePlanModal({
@@ -55,6 +65,14 @@ export function RecipePlanModal({
 }: RecipePlanModalProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [mobileTab, setMobileTab] = useState<'ingredients' | 'steps'>('ingredients');
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // Universal Kitchen Timer popover
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [customMins, setCustomMins] = useState('10');
+
+  // Cook Mode
   const [cookMode, setCookMode] = useState(false);
   const [cookStepIdx, setCookStepIdx] = useState(0);
   const [showIngredientsPeek, setShowIngredientsPeek] = useState(false);
@@ -76,7 +94,8 @@ export function RecipePlanModal({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (cookMode) setCookMode(false);
+        if (showPhotoModal) setShowPhotoModal(false);
+        else if (cookMode) setCookMode(false);
         else onClose();
       } else if (cookMode && e.key === 'ArrowRight') {
         setCookStepIdx((i) => Math.min(recipe.steps.length - 1, i + 1));
@@ -86,7 +105,7 @@ export function RecipePlanModal({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cookMode, onClose, recipe.steps.length]);
+  }, [cookMode, showPhotoModal, onClose, recipe.steps.length]);
 
   // Keep screen awake while in Cook Mode
   useEffect(() => {
@@ -95,9 +114,12 @@ export function RecipePlanModal({
     const nav = navigator as Navigator & {
       wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
     };
-    nav.wakeLock?.request('screen').then((lock) => {
-      wakeLock = lock;
-    }).catch(() => {});
+    nav.wakeLock
+      ?.request('screen')
+      .then((lock) => {
+        wakeLock = lock;
+      })
+      .catch(() => {});
     return () => {
       wakeLock?.release().catch(() => {});
     };
@@ -146,20 +168,27 @@ export function RecipePlanModal({
     }
   };
 
+  const handleStartCustomTimer = (mins: number, label?: string) => {
+    if (!Number.isFinite(mins) || mins <= 0) return;
+    onStartTimer(label || `${mins} min timer`, recipe.title, mins);
+    setTimerOpen(false);
+  };
+
   // Full-Screen Distraction-Free Cook Mode
   if (cookMode && recipe.steps.length > 0) {
     const step = recipe.steps[Math.min(cookStepIdx, recipe.steps.length - 1)];
+    const stepMins = detectStepDuration(step);
     const progressPct = ((cookStepIdx + 1) / recipe.steps.length) * 100;
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-[#1C1917] text-[#FAF7F2]">
         {/* Top Bar */}
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 sm:px-6 py-4">
           <div className="flex items-center gap-3 min-w-0">
             <ChefHat className="h-5 w-5 text-[#F97316] shrink-0" />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                Cook Mode · Step {cookStepIdx + 1} of {recipe.steps.length}
+                Step {cookStepIdx + 1} of {recipe.steps.length}
               </p>
               <h2 className="truncate font-serif text-lg font-semibold">{recipe.title}</h2>
             </div>
@@ -168,8 +197,16 @@ export function RecipePlanModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => handleStartCustomTimer(stepMins || 5, step.title)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20"
+            >
+              <Timer className="h-3.5 w-3.5 text-[#F97316]" />
+              <span>{stepMins ? `${stepMins}m Timer` : '5m Timer'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setShowIngredientsPeek((v) => !v)}
-              className="rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-semibold hover:bg-white/20"
+              className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20"
             >
               {showIngredientsPeek ? 'Hide Ingredients' : `Ingredients (${recipe.ingredients.length})`}
             </button>
@@ -229,20 +266,21 @@ export function RecipePlanModal({
                 </div>
               )}
 
-              {step.durationMinutes && step.durationMinutes > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onStartTimer(step.title, recipe.title, step.durationMinutes!)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#F97316] px-5 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Timer className="h-4 w-4" />
-                  <span>Start {step.durationMinutes} min Timer</span>
-                </button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {stepMins && (
+                  <button
+                    type="button"
+                    onClick={() => onStartTimer(step.title, recipe.title, stepMins)}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#F97316] px-5 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Timer className="h-4 w-4" />
+                    <span>Start {stepMins} min Timer</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Optional Ingredients Peek Drawer */}
           {showIngredientsPeek && (
             <aside className="w-80 shrink-0 border-l border-white/10 bg-[#25211E] p-5 overflow-y-auto">
               <h4 className="text-xs font-bold uppercase tracking-wider text-white/60 mb-3">
@@ -275,7 +313,7 @@ export function RecipePlanModal({
           </button>
 
           <span className="text-xs text-white/50 hidden sm:inline">
-            Use ← / → arrow keys · Screen stays awake
+            Use ← / → keys · Screen stays awake
           </span>
 
           {cookStepIdx < recipe.steps.length - 1 ? (
@@ -310,227 +348,288 @@ export function RecipePlanModal({
       role="dialog"
       aria-modal="true"
       aria-label={recipe.title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1C1917]/60 p-3 sm:p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1C1917]/60 p-2 sm:p-5 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#E8E1D7] bg-[#FAF7F2] shadow-2xl"
+        className="flex h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-[#E8E1D7] bg-[#FAF7F2] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Hero Strip */}
-        <div className="relative grid grid-cols-1 md:grid-cols-12 border-b border-[#E8E1D7] bg-white">
-          <div className="relative md:col-span-5 h-56 md:h-auto min-h-[220px] bg-[#1C1917] overflow-hidden">
-            {recipe.videoUrl && /\.mp4(\?|$)/i.test(recipe.videoUrl) ? (
-              <video
-                src={recipe.videoUrl}
-                poster={recipe.imageUrl}
-                controls
-                playsInline
-                className="h-full w-full object-cover"
-              />
-            ) : recipe.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={recipe.imageUrl}
-                alt={recipe.title}
-                className="h-full w-full object-cover"
-              />
-            ) : null}
-          </div>
+        {/* Compact Non-Bloated Header — Leaves ~80% of Screen for Ingredients & Steps! */}
+        <div className="shrink-0 border-b border-[#E8E1D7] bg-white px-4 py-3.5 sm:px-6 sm:py-4">
+          <div className="flex items-start gap-3.5">
+            {/* Clickable Thumbnail */}
+            {recipe.imageUrl && (
+              <button
+                type="button"
+                onClick={() => setShowPhotoModal(true)}
+                title="View full photo or video"
+                className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-2xl bg-[#F1EAE0] border border-[#E8E1D7] group"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={recipe.imageUrl}
+                  alt={recipe.title}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                {recipe.sourceType === 'video' && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+                    <Play className="h-5 w-5 fill-current" />
+                  </span>
+                )}
+              </button>
+            )}
 
-          <div className="md:col-span-7 flex flex-col justify-between p-5 sm:p-6">
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full bg-[#D93B22]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#D93B22]">
-                    {recipe.category}
-                  </span>
-                  <span className="rounded-full bg-[#FAF7F2] border border-[#E8E1D7] px-2.5 py-0.5 text-[11px] font-semibold text-[#575049]">
-                    {recipe.difficulty}
-                  </span>
-                  {recipe.sourceType === 'video' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917] px-2.5 py-0.5 text-[11px] font-semibold text-white">
-                      <Film className="h-3 w-3 text-[#FB7185]" />
-                      From Video
-                    </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  {editing ? (
+                    <input
+                      type="text"
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.target.value)}
+                      className="w-full rounded-xl border border-[#D4C7B7] bg-white px-3 py-1.5 font-serif text-lg font-semibold text-[#1C1917] focus:border-[#D93B22] focus:outline-none"
+                    />
+                  ) : (
+                    <h2 className="font-serif text-xl sm:text-2xl font-semibold leading-tight text-[#1C1917] line-clamp-2">
+                      {recipe.title}
+                    </h2>
                   )}
+
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6B645C]">
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      <Clock className="h-3.5 w-3.5 text-[#D93B22]" />
+                      {totalMins > 0 ? `${totalMins} mins` : '25 mins'}
+                      {recipe.prepMinutes > 0 && recipe.cookMinutes > 0 && (
+                        <span className="hidden sm:inline text-[#8A8177]">
+                          ({recipe.prepMinutes}m prep · {recipe.cookMinutes}m cook)
+                        </span>
+                      )}
+                    </span>
+                    <span>{recipe.category}</span>
+                    {recipe.sourcePinUrl && (
+                      <a
+                        href={recipe.outboundUrl || recipe.sourcePinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 font-semibold text-[#D93B22] hover:underline"
+                      >
+                        Original
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Close recipe plan"
-                  className="rounded-xl p-1.5 text-[#8A8177] hover:bg-[#FAF7F2] hover:text-[#1C1917]"
+                  aria-label="Close recipe"
+                  className="shrink-0 rounded-xl p-1.5 text-[#8A8177] hover:bg-[#FAF7F2] hover:text-[#1C1917]"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              {editing ? (
-                <div className="mt-3 space-y-2">
-                  <input
-                    type="text"
-                    value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                    className="w-full rounded-xl border border-[#D4C7B7] bg-white px-3 py-2 font-serif text-xl font-semibold text-[#1C1917] focus:border-[#D93B22] focus:outline-none"
-                  />
-                  <textarea
-                    rows={2}
-                    value={draftSummary}
-                    onChange={(e) => setDraftSummary(e.target.value)}
-                    className="w-full rounded-xl border border-[#D4C7B7] bg-white px-3 py-1.5 text-xs text-[#443E38] focus:border-[#D93B22] focus:outline-none"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h2 className="mt-2.5 font-serif text-2xl sm:text-[26px] font-semibold leading-tight text-[#1C1917]">
-                    {recipe.title}
-                  </h2>
-                  {recipe.summary && (
-                    <p className="mt-2 text-sm leading-relaxed text-[#575049]">
-                      {recipe.summary}
-                    </p>
-                  )}
-                </>
-              )}
-
-              <div className="mt-3.5 flex flex-wrap items-center gap-4 text-xs font-medium text-[#6B645C]">
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5 text-[#D93B22]" />
-                  Prep {recipe.prepMinutes}m · Cook {recipe.cookMinutes}m ({totalMins}m total)
-                </span>
-                <span>By {recipe.creator}</span>
-                {recipe.sourcePinUrl && (
-                  <a
-                    href={recipe.outboundUrl || recipe.sourcePinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-semibold text-[#D93B22] hover:underline"
+              {/* Compact Action Row + Universal Kitchen Timer */}
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {recipe.steps.length > 0 && !editing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCookStepIdx(0);
+                      setCookMode(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#D93B22] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#B82D17]"
                   >
-                    Original Source
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                    <Play className="h-3.5 w-3.5 fill-current" />
+                    Start Cooking
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onToggleSelect(recipe.id)}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    selected
+                      ? 'border-[#1C1917] bg-[#1C1917] text-white'
+                      : 'border-[#DED5C8] bg-white text-[#1C1917] hover:bg-[#FAF7F2]'
+                  }`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  {selected ? 'On Shopping List' : 'Add to List'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onToggleMadeIt(recipe.id)}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    madeIt
+                      ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
+                      : 'border-[#DED5C8] bg-white text-[#443E38] hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
+                  }`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  {madeIt ? 'Made It' : 'Mark Made'}
+                </button>
+
+                {/* Universal Timer Button (Available on EVERY Recipe!) */}
+                <button
+                  type="button"
+                  onClick={() => setTimerOpen((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    timerOpen
+                      ? 'border-[#F97316] bg-[#F97316] text-white'
+                      : 'border-[#DED5C8] bg-white text-[#443E38] hover:border-[#F97316] hover:text-[#D93B22]'
+                  }`}
+                >
+                  <Timer className="h-3.5 w-3.5" />
+                  Timer
+                </button>
+
+                {!editing ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#DED5C8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#575049] hover:bg-[#FAF7F2]"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleSave}
+                    className="inline-flex items-center gap-1 rounded-xl bg-[#1C1917] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#332E2A]"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                )}
+
+                {recipe.sourcePinUrl && recipe.sourceType !== 'curated' && (
+                  <button
+                    type="button"
+                    disabled={reExtracting}
+                    onClick={handleReExtractClick}
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#DED5C8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#575049] hover:bg-[#FAF7F2] disabled:opacity-50"
+                    title="Re-read this pin to refresh the recipe"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${reExtracting ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">{reExtracting ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
                 )}
               </div>
-
-              {recipe.extractionNotes && (
-                <p className="mt-2.5 rounded-xl bg-[#FAF7F2] border border-[#E8E1D7] px-3 py-2 text-[11px] text-[#6B645C]">
-                  {recipe.extractionNotes}
-                </p>
-              )}
             </div>
+          </div>
 
-            {/* Action Row */}
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {recipe.steps.length > 0 && !editing && (
+          {/* Universal Quick Kitchen Timer Strip (toggled on ANY recipe) */}
+          {timerOpen && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-[#F97316]/30 bg-[#FFF8F3] px-3.5 py-2.5 text-xs">
+              <span className="font-bold text-[#1C1917] inline-flex items-center gap-1.5">
+                <Timer className="h-3.5 w-3.5 text-[#F97316]" />
+                Quick Timer:
+              </span>
+              {[5, 10, 15, 20, 30].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => handleStartCustomTimer(m, `${m}m · ${recipe.title}`)}
+                  className="rounded-lg border border-[#F97316]/30 bg-white px-2.5 py-1 font-bold text-[#C2410C] hover:bg-[#F97316] hover:text-white transition-colors tabular-nums"
+                >
+                  {m}m
+                </button>
+              ))}
+              <div className="flex items-center gap-1.5 ml-auto">
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={customMins}
+                  onChange={(e) => setCustomMins(e.target.value)}
+                  className="w-16 rounded-lg border border-[#DED5C8] bg-white px-2 py-1 text-center font-bold text-[#1C1917] tabular-nums focus:border-[#F97316] focus:outline-none"
+                  aria-label="Custom timer minutes"
+                />
+                <span className="text-[#6B645C]">min</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setCookStepIdx(0);
-                    setCookMode(true);
-                  }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#D93B22] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#B82D17]"
+                  onClick={() => handleStartCustomTimer(Number(customMins), `${customMins}m timer`)}
+                  className="rounded-lg bg-[#1C1917] px-3 py-1 font-bold text-white hover:bg-[#332E2A]"
                 >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                  Start Cooking
+                  Start
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => onToggleSelect(recipe.id)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-colors ${
-                  selected
-                    ? 'border-[#1C1917] bg-[#1C1917] text-white'
-                    : 'border-[#DED5C8] bg-white text-[#1C1917] hover:bg-[#FAF7F2]'
-                }`}
-              >
-                <Check className="h-3.5 w-3.5" />
-                {selected ? 'On Shopping List' : 'Add to List'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onToggleMadeIt(recipe.id)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-colors ${
-                  madeIt
-                    ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
-                    : 'border-[#DED5C8] bg-white text-[#443E38] hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
-                }`}
-              >
-                <Check className="h-3.5 w-3.5" />
-                {madeIt ? 'Made It' : 'Mark as Made'}
-              </button>
-
-              {!editing ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3 py-2.5 text-xs font-semibold text-[#575049] hover:bg-[#FAF7F2]"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={handleSave}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-3.5 py-2.5 text-xs font-bold text-white hover:bg-[#332E2A]"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              )}
-
-              {recipe.sourcePinUrl && recipe.sourceType !== 'curated' && (
-                <button
-                  type="button"
-                  disabled={reExtracting}
-                  onClick={handleReExtractClick}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3 py-2.5 text-xs font-semibold text-[#575049] hover:bg-[#FAF7F2] disabled:opacity-50"
-                  title="Re-read this pin to refresh the recipe"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${reExtracting ? 'animate-spin' : ''}`} />
-                  {reExtracting ? 'Refreshing...' : 'Refresh'}
-                </button>
-              )}
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Mobile Tab Switcher (Ingredients | Steps) — Zero Fighting Scrolls on Phones! */}
+        <div className="shrink-0 border-b border-[#E8E1D7] bg-white px-4 py-2 md:hidden">
+          <div className="grid grid-cols-2 rounded-xl bg-[#FAF7F2] p-1 border border-[#E8E1D7]">
+            <button
+              type="button"
+              onClick={() => setMobileTab('ingredients')}
+              className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
+                mobileTab === 'ingredients'
+                  ? 'bg-white text-[#1C1917] shadow-sm'
+                  : 'text-[#6B645C]'
+              }`}
+            >
+              Ingredients ({recipe.ingredients.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('steps')}
+              className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
+                mobileTab === 'steps'
+                  ? 'bg-white text-[#1C1917] shadow-sm'
+                  : 'text-[#6B645C]'
+              }`}
+            >
+              Steps ({recipe.steps.length})
+            </button>
           </div>
         </div>
 
-        {/* Scrollable 2-Column Content */}
-        <div className="thin-scroll flex-1 overflow-y-auto p-5 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Ingredients Column */}
-            <div className="md:col-span-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-lg font-semibold text-[#1C1917]">Ingredients</h3>
+        {/* Main Body: Side-by-Side Independent Scroll Panels on Desktop, Tabbed Full-Height on Mobile */}
+        <div className="min-h-0 flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+          {/* LEFT PANEL: Ingredients (own scroll, never pushes steps off-page!) */}
+          <div
+            className={`md:col-span-5 md:border-r border-[#E8E1D7] bg-[#FCFBF8] flex flex-col min-h-0 ${
+              mobileTab === 'ingredients' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
+            <div className="shrink-0 flex items-center justify-between border-b border-[#EFE8DF] px-5 py-3">
+              <h3 className="font-serif text-base font-semibold text-[#1C1917]">
+                Ingredients ({recipe.ingredients.length})
+              </h3>
 
-                {/* Serving Scaler */}
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#E8E1D7] bg-white px-2 py-1 text-xs font-semibold text-[#1C1917]">
-                  <Users className="h-3.5 w-3.5 text-[#8A8177]" />
-                  <button
-                    type="button"
-                    aria-label="Decrease servings"
-                    onClick={() => onChangeServings(recipe.id, Math.max(1, servings - 1))}
-                    className="rounded-md p-1 hover:bg-[#FAF7F2]"
-                  >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <span className="w-6 text-center font-bold tabular-nums">{servings}</span>
-                  <button
-                    type="button"
-                    aria-label="Increase servings"
-                    onClick={() => onChangeServings(recipe.id, Math.min(20, servings + 1))}
-                    className="rounded-md p-1 hover:bg-[#FAF7F2]"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </div>
+              {/* Serving Scaler */}
+              <div className="inline-flex items-center gap-1 rounded-xl border border-[#E8E1D7] bg-white px-2 py-1 text-xs font-semibold text-[#1C1917]">
+                <Users className="h-3.5 w-3.5 text-[#8A8177]" />
+                <button
+                  type="button"
+                  aria-label="Decrease servings"
+                  onClick={() => onChangeServings(recipe.id, Math.max(1, servings - 1))}
+                  className="rounded-md p-0.5 hover:bg-[#FAF7F2]"
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className="w-6 text-center font-bold tabular-nums">{servings}</span>
+                <button
+                  type="button"
+                  aria-label="Increase servings"
+                  onClick={() => onChangeServings(recipe.id, Math.min(20, servings + 1))}
+                  className="rounded-md p-0.5 hover:bg-[#FAF7F2]"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
               </div>
+            </div>
 
-              <ul className="space-y-2 rounded-2xl border border-[#E8E1D7] bg-white p-4">
+            <div className="thin-scroll flex-1 overflow-y-auto p-4 sm:p-5">
+              <ul className="space-y-1.5">
                 {recipe.ingredients.map((ing, idx) => {
                   const checked = checkedIngredients.has(idx);
                   const qty = formatScaledIngredientQty(ing, scale);
@@ -545,7 +644,7 @@ export function RecipePlanModal({
                           return next;
                         })
                       }
-                      className={`flex cursor-pointer items-start gap-2.5 rounded-xl p-2 transition-colors hover:bg-[#FAF7F2] ${
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-xl border border-transparent bg-white px-3 py-2.5 shadow-2xs transition-colors hover:border-[#E8E1D7] ${
                         checked ? 'opacity-50 line-through' : ''
                       }`}
                     >
@@ -560,9 +659,9 @@ export function RecipePlanModal({
                       </span>
                       <div className="text-sm leading-snug">
                         <span className="font-bold text-[#1C1917] tabular-nums">{qty}</span>{' '}
-                        <span className="text-[#332E2A]">{ing.name}</span>
+                        <span className="text-[#292524]">{ing.name}</span>
                         {ing.prepNote && (
-                          <span className="text-xs text-[#8A8177]">, {ing.prepNote}</span>
+                          <span className="text-xs text-[#78716C]"> — {ing.prepNote}</span>
                         )}
                       </div>
                     </li>
@@ -570,34 +669,58 @@ export function RecipePlanModal({
                 })}
               </ul>
             </div>
+          </div>
 
-            {/* Step-by-Step Plan Column */}
-            <div className="md:col-span-7 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-lg font-semibold text-[#1C1917]">
-                  Step-by-Step Plan
-                </h3>
-                <span className="text-xs font-medium text-[#8A8177] tabular-nums">
-                  {completedSteps.size}/{recipe.steps.length} done
-                </span>
-              </div>
+          {/* RIGHT PANEL: Step-by-Step Instructions (own independent scroll!) */}
+          <div
+            className={`md:col-span-7 flex flex-col min-h-0 bg-[#FAF7F2] ${
+              mobileTab === 'steps' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
+            <div className="shrink-0 flex items-center justify-between border-b border-[#EFE8DF] px-5 py-3 bg-[#FAF7F2]">
+              <h3 className="font-serif text-base font-semibold text-[#1C1917]">
+                Method
+              </h3>
+              <span className="text-xs font-semibold text-[#8A8177] tabular-nums">
+                {completedSteps.size} of {recipe.steps.length} done
+              </span>
+            </div>
+
+            <div className="thin-scroll flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+              {recipe.summary && !editing && (
+                <p className="text-sm text-[#575049] leading-relaxed px-1">
+                  {recipe.summary}
+                </p>
+              )}
 
               {editing ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-[#6B645C]">
-                    One step per line using <code className="rounded bg-white px-1 py-0.5">Title :: Instruction</code>
-                  </p>
-                  <textarea
-                    rows={10}
-                    value={draftStepsText}
-                    onChange={(e) => setDraftStepsText(e.target.value)}
-                    className="w-full rounded-2xl border border-[#D4C7B7] bg-white p-4 text-xs leading-relaxed text-[#1C1917] focus:border-[#D93B22] focus:outline-none"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#6B645C] mb-1">Summary</label>
+                    <textarea
+                      rows={2}
+                      value={draftSummary}
+                      onChange={(e) => setDraftSummary(e.target.value)}
+                      className="w-full rounded-xl border border-[#D4C7B7] bg-white px-3 py-2 text-xs text-[#1C1917] focus:border-[#D93B22] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#6B645C] mb-1">
+                      Steps (one per line as <code className="rounded bg-white px-1">Title :: Instruction</code>)
+                    </label>
+                    <textarea
+                      rows={10}
+                      value={draftStepsText}
+                      onChange={(e) => setDraftStepsText(e.target.value)}
+                      className="w-full rounded-2xl border border-[#D4C7B7] bg-white p-3.5 text-xs leading-relaxed text-[#1C1917] focus:border-[#D93B22] focus:outline-none"
+                    />
+                  </div>
                 </div>
               ) : (
                 <ol className="space-y-3">
                   {recipe.steps.map((step) => {
                     const done = completedSteps.has(step.stepNumber);
+                    const stepMins = detectStepDuration(step);
                     return (
                       <li
                         key={step.stepNumber}
@@ -650,16 +773,16 @@ export function RecipePlanModal({
                                     {step.videoTimestamp}
                                   </span>
                                 )}
-                                {step.durationMinutes && step.durationMinutes > 0 && (
+                                {stepMins && (
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      onStartTimer(step.title, recipe.title, step.durationMinutes!)
+                                      onStartTimer(step.title, recipe.title, stepMins)
                                     }
                                     className="inline-flex items-center gap-1 rounded-full bg-[#D93B22]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#D93B22] hover:bg-[#D93B22] hover:text-white transition-colors"
                                   >
                                     <Timer className="h-3 w-3" />
-                                    {step.durationMinutes}m
+                                    {stepMins}m
                                   </button>
                                 )}
                               </div>
@@ -686,6 +809,48 @@ export function RecipePlanModal({
           </div>
         </div>
       </div>
+
+      {/* Optional Full Photo / Video Lightbox */}
+      {showPhotoModal && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowPhotoModal(false);
+          }}
+        >
+          <div
+            className="relative max-w-2xl w-full overflow-hidden rounded-3xl bg-[#1C1917] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPhotoModal(false)}
+              className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+              aria-label="Close photo preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {recipe.videoUrl && /\.mp4(\?|$)/i.test(recipe.videoUrl) ? (
+              <video
+                src={recipe.videoUrl}
+                poster={recipe.imageUrl}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[80vh] w-full object-contain"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={recipe.imageUrl}
+                alt={recipe.title}
+                className="max-h-[80vh] w-full object-contain"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

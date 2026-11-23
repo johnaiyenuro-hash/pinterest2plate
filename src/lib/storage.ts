@@ -110,6 +110,22 @@ async function ensurePgSchema(pool: import('pg').Pool): Promise<void> {
         [recipe.id, recipe.boardId, recipe.status, JSON.stringify(recipe)],
       );
     }
+  } else {
+    // Refresh built-in curated starter recipes when photos or ingredients are updated
+    for (const board of DEFAULT_BOARDS) {
+      await pool.query(
+        `UPDATE p2p_boards SET data = $2, updated_at = NOW()
+         WHERE id = $1 AND (data->>'source') = 'curated' AND (data->>'lastSyncedAt') IS DISTINCT FROM $3`,
+        [board.id, JSON.stringify(board), board.lastSyncedAt],
+      );
+    }
+    for (const recipe of SEED_RECIPES) {
+      await pool.query(
+        `UPDATE p2p_recipes SET data = $2, updated_at = NOW()
+         WHERE id = $1 AND (data->>'sourceType') = 'curated' AND (data->>'extractedAt') IS DISTINCT FROM $3`,
+        [recipe.id, JSON.stringify(recipe), recipe.extractedAt],
+      );
+    }
   }
 }
 
@@ -119,10 +135,31 @@ function readLocalDb(): LocalDbShape {
   try {
     if (fs.existsSync(LOCAL_DB_PATH)) {
       const parsed = JSON.parse(fs.readFileSync(LOCAL_DB_PATH, 'utf-8')) as Partial<LocalDbShape>;
-      const boards = (parsed.boards || DEFAULT_BOARDS).map((b) => BoardSchema.parse(b));
-      const recipes = (parsed.recipes || SEED_RECIPES).map((r) => RecipeSchema.parse(r));
+      const seedBoardMap = new Map(DEFAULT_BOARDS.map((b) => [b.id, b]));
+      const seedRecipeMap = new Map(SEED_RECIPES.map((r) => [r.id, r]));
+      let dirty = false;
+
+      const boards = (parsed.boards || DEFAULT_BOARDS).map((b) => {
+        const valid = BoardSchema.parse(b);
+        const seed = seedBoardMap.get(valid.id);
+        if (seed && valid.source === 'curated' && valid.lastSyncedAt !== seed.lastSyncedAt) {
+          dirty = true;
+          return { ...seed };
+        }
+        return valid;
+      });
+      const recipes = (parsed.recipes || SEED_RECIPES).map((r) => {
+        const valid = RecipeSchema.parse(r);
+        const seed = seedRecipeMap.get(valid.id);
+        if (seed && valid.sourceType === 'curated' && valid.extractedAt !== seed.extractedAt) {
+          dirty = true;
+          return { ...seed };
+        }
+        return valid;
+      });
       const state = parsed.state ? { ...DEFAULT_USER_STATE, ...parsed.state } : { ...DEFAULT_USER_STATE };
       memoryFallback = { boards, recipes, state };
+      if (dirty) writeLocalDb(memoryFallback);
       return memoryFallback;
     }
   } catch (err) {
