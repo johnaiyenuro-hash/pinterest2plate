@@ -1,23 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
+  CheckCircle2,
   ChefHat,
   ChevronDown,
   Clock,
   Dices,
   Film,
   FilterX,
+  Loader2,
   Plus,
   Search,
   ShoppingBasket,
   Sparkles,
+  Square,
   UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { BasketPanel } from './BasketPanel';
-import { ImportModal, type ExtractionProgressItem } from './ImportModal';
+import { ImportModal, type DiscoverSummary, type ExtractionProgressItem } from './ImportModal';
 import { KitchenTimerBar, type ActiveTimer } from './KitchenTimerBar';
 import { ExtractingPinCard, RecipeCard } from './RecipeCard';
 import { RecipePlanModal } from './RecipePlanModal';
@@ -40,6 +43,7 @@ const LS_PANTRY_CHECKED = 'p2p_v2_pantry_checked';
 const LS_STORE = 'p2p_v2_store';
 const LS_LOCAL_RECIPES = 'p2p_v2_imported_recipes';
 const LS_LOCAL_BOARDS = 'p2p_v2_imported_boards';
+const LS_MADE_IT = 'p2p_v2_made_it';
 
 export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerAppProps) {
   const [boards, setBoards] = useState<Board[]>(initialBoards);
@@ -50,11 +54,13 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   const [currentStore, setCurrentStore] = useState<SupermarketKey>('tesco');
   const [hidePantry, setHidePantry] = useState(false);
   const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
+  const [madeItIds, setMadeItIds] = useState<Set<string>>(new Set());
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [mediaFilter, setMediaFilter] = useState<'all' | 'video' | 'quick'>('all');
+  const [cookedFilter, setCookedFilter] = useState<'all' | 'to_try' | 'made'>('all');
 
   // Modals & drawers
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
@@ -64,9 +70,12 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   const [mobileBasketOpen, setMobileBasketOpen] = useState(false);
   const [boardMenuOpen, setBoardMenuOpen] = useState(false);
 
-  // Extraction state
+  // Extraction state + AbortController for Cancel Import
   const [progressItems, setProgressItems] = useState<ExtractionProgressItem[]>([]);
+  const [discoverSummary, setDiscoverSummary] = useState<DiscoverSummary | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>({
     geminiConfigured: true,
     pinterestOAuthConfigured: false,
@@ -82,7 +91,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     setToast(msg);
     setTimeout(() => {
       setToast((prev) => (prev === msg ? null : prev));
-    }, 3200);
+    }, 3400);
   }, []);
 
   // Hydrate persisted client preferences + any client-cached imported recipes
@@ -93,6 +102,9 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
       const savedChecked = JSON.parse(localStorage.getItem(LS_PANTRY_CHECKED) || 'null');
       if (Array.isArray(savedChecked)) setCheckedKeys(new Set(savedChecked));
+
+      const savedMadeIt = JSON.parse(localStorage.getItem(LS_MADE_IT) || 'null');
+      if (Array.isArray(savedMadeIt)) setMadeItIds(new Set(savedMadeIt));
 
       const savedStore = localStorage.getItem(LS_STORE) as SupermarketKey | null;
       if (savedStore) setCurrentStore(savedStore);
@@ -127,10 +139,16 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       .then((d: RuntimeStatus) => setRuntimeStatus(d))
       .catch(() => {});
 
-    // Handle Bookmarklet (?import=...) and Pinterest OAuth (?pinterest=connected)
+    // Handle Bookmarklet (?import=... or ?importBatch=...) and Pinterest OAuth (?pinterest=connected)
     const params = new URLSearchParams(window.location.search);
+    const importBatchParam = params.get('importBatch');
     const importUrlParam = params.get('import');
-    if (importUrlParam) {
+    if (importBatchParam) {
+      setImportInitialUrl(importBatchParam);
+      setImportOpen(true);
+      notify('Loaded scrolled pins from your Pinterest board — click Add New Pins!');
+      window.history.replaceState({}, '', '/');
+    } else if (importUrlParam) {
       setImportInitialUrl(importUrlParam);
       setImportOpen(true);
       window.history.replaceState({}, '', '/');
@@ -149,7 +167,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   const persistLocalCache = useCallback((nextRecipes: Recipe[], nextBoards: Board[]) => {
     try {
       const importedOnly = nextRecipes.filter((r) => r.sourceType !== 'curated');
-      localStorage.setItem(LS_LOCAL_RECIPES, JSON.stringify(importedOnly.slice(0, 120)));
+      localStorage.setItem(LS_LOCAL_RECIPES, JSON.stringify(importedOnly.slice(0, 150)));
       const customBoards = nextBoards.filter((b) => b.source !== 'curated');
       localStorage.setItem(LS_LOCAL_BOARDS, JSON.stringify(customBoards));
     } catch {
@@ -177,6 +195,35 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       return next;
     });
   }, []);
+
+  const toggleMadeIt = useCallback(
+    (id: string) => {
+      setMadeItIds((prev) => {
+        const next = new Set(prev);
+        const wasMade = next.has(id);
+        if (wasMade) next.delete(id);
+        else next.add(id);
+        localStorage.setItem(LS_MADE_IT, JSON.stringify(Array.from(next)));
+        notify(wasMade ? 'Moved back to To Try' : 'Marked as Made It!');
+        return next;
+      });
+    },
+    [notify],
+  );
+
+  const markMadeIt = useCallback(
+    (id: string) => {
+      setMadeItIds((prev) => {
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        localStorage.setItem(LS_MADE_IT, JSON.stringify(Array.from(next)));
+        notify('Nice cooking! Marked as Made It');
+        return next;
+      });
+    },
+    [notify],
+  );
 
   const handleToggleItemChecked = useCallback((key: string) => {
     setCheckedKeys((prev) => {
@@ -213,13 +260,30 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     [notify],
   );
 
-  // Batch extraction runner (concurrency = 2 so Vercel serverless functions never time out)
+  const handleCancelImport = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setExtracting(false);
+    setProgressItems((prev) =>
+      prev.map((item) =>
+        item.state === 'queued' || item.state === 'extracting'
+          ? { ...item, state: 'cancelled' }
+          : item,
+      ),
+    );
+    notify('Import cancelled — already-extracted recipes were kept.');
+  }, [notify]);
+
+  // Batch extraction runner with AbortController cancel support
   const runBatchExtraction = useCallback(
     async (
       board: Board,
       cachedRecipes: Recipe[],
       pendingPins: RawPin[],
       skipEnrich = false,
+      controller?: AbortController,
     ) => {
       setBoards((prev) => {
         const idx = prev.findIndex((b) => b.id === board.id);
@@ -234,7 +298,8 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
       if (pendingPins.length === 0) {
         setActiveBoardId(board.id);
-        notify(`Board "${board.name}" is up to date (${cachedRecipes.length} cached recipes)`);
+        setExtracting(false);
+        notify(`No unimported pins left in this batch (${cachedRecipes.length} already in library)`);
         return;
       }
 
@@ -242,13 +307,16 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       setExtracting(true);
       setProgressItems(pendingPins.map((pin) => ({ pin, state: 'queued' })));
 
+      const activeController = controller || new AbortController();
+      abortControllerRef.current = activeController;
+
       const queue = [...pendingPins];
       let readyCount = 0;
       let skippedCount = 0;
       let missingKeyHit = false;
 
       const worker = async () => {
-        while (queue.length > 0 && !missingKeyHit) {
+        while (queue.length > 0 && !missingKeyHit && !activeController.signal.aborted) {
           const pin = queue.shift();
           if (!pin) break;
 
@@ -263,6 +331,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ pin, skipEnrich }),
+              signal: activeController.signal,
             });
             const data = await res.json();
 
@@ -297,6 +366,14 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
               );
             }
           } catch (err) {
+            if (activeController.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+              setProgressItems((prev) =>
+                prev.map((item) =>
+                  item.pin.pinId === pin.pinId ? { ...item, state: 'cancelled' } : item,
+                ),
+              );
+              break;
+            }
             const msg = err instanceof Error ? err.message : 'Extraction failed';
             setProgressItems((prev) =>
               prev.map((item) =>
@@ -308,63 +385,112 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       };
 
       await Promise.all([worker(), worker()]);
-      setExtracting(false);
 
-      if (missingKeyHit) {
-        notify('Add GEMINI_API_KEY to extract video & image pins.');
-      } else {
-        notify(
-          `Imported ${readyCount} recipe${readyCount === 1 ? '' : 's'}${
-            skippedCount > 0 ? ` (${skippedCount} non-recipe skipped)` : ''
-          }`,
-        );
+      if (!activeController.signal.aborted) {
+        abortControllerRef.current = null;
+        setExtracting(false);
+        if (missingKeyHit) {
+          notify('Add GEMINI_API_KEY to extract video & image pins.');
+        } else {
+          notify(
+            `Added ${readyCount} new recipe${readyCount === 1 ? '' : 's'}${
+              skippedCount > 0 ? ` (${skippedCount} non-recipe skipped)` : ''
+            }`,
+          );
+        }
       }
     },
     [mergeRecipeIntoState, notify, persistLocalCache, recipes],
   );
 
   const handleStartPublicImport = useCallback(
-    async (url: string, maxPins: number) => {
+    async (url: string, maxPins: number, samplingMode: 'latest' | 'diverse') => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setExtracting(true);
       setProgressItems([]);
+      setDiscoverSummary(null);
+
       try {
+        const excludeIds = recipes.map((r) => r.id);
         const res = await fetch('/api/boards/discover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, maxPins }),
+          body: JSON.stringify({ url, maxPins, samplingMode, excludeIds }),
+          signal: controller.signal,
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Could not discover board pins');
 
-        await runBatchExtraction(data.board, data.cachedRecipes || [], data.pendingPins || [], false);
+        setDiscoverSummary({
+          totalBoardPins: data.totalBoardPins ?? data.totalDiscovered ?? 0,
+          totalDiscovered: data.totalDiscovered ?? 0,
+          cappedByPublicFeed: Boolean(data.cappedByPublicFeed),
+          unimportedAvailable: data.unimportedAvailable ?? 0,
+        });
+
+        await runBatchExtraction(
+          data.board,
+          data.cachedRecipes || [],
+          data.pendingPins || [],
+          false,
+          controller,
+        );
       } catch (err) {
+        if (controller.signal.aborted) return;
         setExtracting(false);
         notify(err instanceof Error ? err.message : 'Import failed');
       }
     },
-    [notify, runBatchExtraction],
+    [notify, recipes, runBatchExtraction],
   );
 
   const handleStartOAuthImport = useCallback(
-    async (board: Board, maxPins: number) => {
+    async (board: Board, maxPins: number, samplingMode: 'latest' | 'diverse') => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setExtracting(true);
       setProgressItems([]);
+      setDiscoverSummary(null);
+
       try {
+        const excludeIds = recipes.map((r) => r.id);
         const res = await fetch('/api/boards/discover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ oauthBoardId: board.id, boardName: board.name, maxPins }),
+          body: JSON.stringify({
+            oauthBoardId: board.id,
+            boardName: board.name,
+            maxPins,
+            samplingMode,
+            excludeIds,
+          }),
+          signal: controller.signal,
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Could not sync Pinterest board');
 
-        await runBatchExtraction(data.board, data.cachedRecipes || [], data.pendingPins || [], true);
+        setDiscoverSummary({
+          totalBoardPins: data.totalBoardPins ?? data.totalDiscovered ?? 0,
+          totalDiscovered: data.totalDiscovered ?? 0,
+          cappedByPublicFeed: false,
+          unimportedAvailable: data.unimportedAvailable ?? 0,
+        });
+
+        await runBatchExtraction(
+          data.board,
+          data.cachedRecipes || [],
+          data.pendingPins || [],
+          true,
+          controller,
+        );
       } catch (err) {
+        if (controller.signal.aborted) return;
         setExtracting(false);
         notify(err instanceof Error ? err.message : 'OAuth board import failed');
       }
     },
-    [notify, runBatchExtraction],
+    [notify, recipes, runBatchExtraction],
   );
 
   const handleForceExtractSkipped = useCallback(
@@ -429,6 +555,13 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     [boardScopedRecipes],
   );
 
+  const madeCount = useMemo(
+    () => readyRecipes.filter((r) => madeItIds.has(r.id)).length,
+    [readyRecipes, madeItIds],
+  );
+
+  const toTryCount = readyRecipes.length - madeCount;
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: readyRecipes.length };
     for (const cat of RECIPE_CATEGORIES) {
@@ -443,6 +576,8 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       if (activeCategory !== 'all' && r.category !== activeCategory) return false;
       if (mediaFilter === 'video' && r.sourceType !== 'video') return false;
       if (mediaFilter === 'quick' && r.prepMinutes + r.cookMinutes > 25) return false;
+      if (cookedFilter === 'to_try' && madeItIds.has(r.id)) return false;
+      if (cookedFilter === 'made' && !madeItIds.has(r.id)) return false;
       if (!q) return true;
       return (
         r.title.toLowerCase().includes(q) ||
@@ -452,7 +587,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
         r.ingredients.some((i) => i.name.toLowerCase().includes(q))
       );
     });
-  }, [readyRecipes, activeCategory, mediaFilter, searchQuery]);
+  }, [readyRecipes, activeCategory, mediaFilter, cookedFilter, madeItIds, searchQuery]);
 
   const activeBoardLabel = useMemo(() => {
     if (activeBoardId === 'all') return `All Boards (${boards.length})`;
@@ -470,12 +605,19 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   );
 
   const handlePickThree = () => {
-    const pool = filteredRecipes.length >= 3 ? filteredRecipes : readyRecipes;
+    const untriedPool = (filteredRecipes.length >= 3 ? filteredRecipes : readyRecipes).filter(
+      (r) => !madeItIds.has(r.id),
+    );
+    const pool = untriedPool.length >= 3 ? untriedPool : filteredRecipes.length >= 3 ? filteredRecipes : readyRecipes;
     const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
     const nextIds = shuffled.map((r) => r.id);
     setSelectedIds(nextIds);
     localStorage.setItem(LS_SELECTED, JSON.stringify(nextIds));
-    notify('Picked 3 balanced meals for your week');
+    notify(
+      untriedPool.length >= 3
+        ? 'Picked 3 untried dishes for your week'
+        : 'Picked 3 balanced meals for your week',
+    );
   };
 
   const handleClearSelection = () => {
@@ -578,6 +720,18 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
           {/* Right Actions */}
           <div className="flex items-center gap-2 shrink-0">
+            {extracting && (
+              <button
+                type="button"
+                onClick={handleCancelImport}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span className="hidden sm:inline">Cancel Import</span>
+                <Square className="h-3 w-3 fill-current sm:hidden" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -611,7 +765,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 What&apos;s on the menu this week?
               </h1>
               <p className="mt-1 text-sm text-[#6B645C]">
-                Pick your dishes to consolidate ingredients, or open any card for step-by-step cook mode.
+                Pick your dishes to consolidate ingredients, tick off ones you&apos;ve made, or open any card to cook.
               </p>
             </div>
 
@@ -622,7 +776,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#332E2A] active:scale-[0.98]"
               >
                 <Dices className="h-4 w-4 text-[#F97316]" />
-                Pick 3 for Me
+                {toTryCount >= 3 ? 'Pick 3 Untried' : 'Pick 3 for Me'}
               </button>
               {selectedIds.length > 0 && (
                 <button
@@ -636,7 +790,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
             </div>
           </div>
 
-          {/* Search & Clean Filter Bar (No Ugly Scrollbars!) */}
+          {/* Search & Clean Filter Bar */}
           <div className="rounded-2xl border border-[#E8E1D7] bg-white p-3.5 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5">
               <div className="relative flex-1">
@@ -660,12 +814,35 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 )}
               </div>
 
-              {/* Media / Quick Filter Chips */}
-              <div className="flex items-center gap-1.5 shrink-0">
+              {/* Quick Filter Chips: To Try / Made It / Videos / Under 25m */}
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCookedFilter((v) => (v === 'to_try' ? 'all' : 'to_try'))}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                    cookedFilter === 'to_try'
+                      ? 'border-[#D93B22] bg-[#D93B22] text-white'
+                      : 'border-[#EFE8DF] bg-[#FCFBF8] text-[#575049] hover:border-[#D4C7B7]'
+                  }`}
+                >
+                  To Try ({toTryCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCookedFilter((v) => (v === 'made' ? 'all' : 'made'))}
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                    cookedFilter === 'made'
+                      ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
+                      : 'border-[#EFE8DF] bg-[#FCFBF8] text-[#575049] hover:border-[#D4C7B7]'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Made ({madeCount})
+                </button>
                 <button
                   type="button"
                   onClick={() => setMediaFilter((v) => (v === 'video' ? 'all' : 'video'))}
-                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
                     mediaFilter === 'video'
                       ? 'border-[#1C1917] bg-[#1C1917] text-white'
                       : 'border-[#EFE8DF] bg-[#FCFBF8] text-[#575049] hover:border-[#D4C7B7]'
@@ -677,19 +854,19 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 <button
                   type="button"
                   onClick={() => setMediaFilter((v) => (v === 'quick' ? 'all' : 'quick'))}
-                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                  className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
                     mediaFilter === 'quick'
                       ? 'border-[#1C1917] bg-[#1C1917] text-white'
                       : 'border-[#EFE8DF] bg-[#FCFBF8] text-[#575049] hover:border-[#D4C7B7]'
                   }`}
                 >
                   <Clock className="h-3.5 w-3.5" />
-                  Under 25m
+                  &lt;25m
                 </button>
               </div>
             </div>
 
-            {/* Category Pills — cleanly wrapped / hidden scrollbar */}
+            {/* Category Pills */}
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto">
               <button
                 type="button"
@@ -748,7 +925,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 </button>
               )}
               <span className="hidden sm:inline text-[#8A8177]">
-                Tap a card to select · View Plan to cook
+                Tap a card to select · Tick &ldquo;Made it&rdquo; once cooked
               </span>
             </div>
           </div>
@@ -761,7 +938,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                 No matching recipes
               </p>
               <p className="mt-1 text-xs text-[#6B645C]">
-                Try clearing a filter, or import a new Pinterest board with video &amp; image pins.
+                Try clearing a filter, or import more pins from your Pinterest board.
               </p>
               <div className="mt-4 flex items-center justify-center gap-2">
                 <button
@@ -770,6 +947,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                     setSearchQuery('');
                     setActiveCategory('all');
                     setMediaFilter('all');
+                    setCookedFilter('all');
                   }}
                   className="rounded-xl border border-[#DED5C8] bg-white px-4 py-2 text-xs font-bold text-[#1C1917] hover:bg-[#FAF7F2]"
                 >
@@ -801,7 +979,9 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                   key={recipe.id}
                   recipe={recipe}
                   selected={selectedIds.includes(recipe.id)}
+                  madeIt={madeItIds.has(recipe.id)}
                   onToggleSelect={toggleSelectRecipe}
+                  onToggleMadeIt={toggleMadeIt}
                   onOpenPlan={(r) => setActiveRecipeId(r.id)}
                 />
               ))}
@@ -933,11 +1113,14 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
           recipe={activeRecipe}
           servings={servingsOverride[activeRecipe.id] ?? activeRecipe.servings}
           selected={selectedIds.includes(activeRecipe.id)}
+          madeIt={madeItIds.has(activeRecipe.id)}
           onClose={() => setActiveRecipeId(null)}
           onChangeServings={(id, nextServings) =>
             setServingsOverride((prev) => ({ ...prev, [id]: nextServings }))
           }
           onToggleSelect={toggleSelectRecipe}
+          onToggleMadeIt={toggleMadeIt}
+          onMarkMadeIt={markMadeIt}
           onStartTimer={handleStartTimer}
           onSaveEdits={handleSaveRecipeEdits}
           onReExtract={handleForceExtractSkipped}
@@ -950,8 +1133,10 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
         initialUrl={importInitialUrl}
         status={runtimeStatus}
         progressItems={progressItems}
+        discoverSummary={discoverSummary}
         isRunning={extracting}
         onClose={() => setImportOpen(false)}
+        onCancelImport={handleCancelImport}
         onStartPublicImport={handleStartPublicImport}
         onStartOAuthImport={handleStartOAuthImport}
         onDisconnectPinterest={async () => {

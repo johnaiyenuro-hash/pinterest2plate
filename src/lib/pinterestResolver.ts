@@ -475,49 +475,69 @@ export async function enrichSinglePin(
   };
 }
 
+export async function fetchPublicBoardPinCount(boardUrl: string): Promise<number | null> {
+  try {
+    const { status, body } = await fetchTextWithTimeout(boardUrl, 8000);
+    if (status !== 200 || !body) return null;
+    const match = body.match(/"pin_count"\s*:\s*(\d+)/);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function discoverPublicBoardPins(
   target: ParsedImportTarget,
   maxPins = 25,
-): Promise<RawPin[]> {
+): Promise<{ pins: RawPin[]; totalBoardPins: number | null }> {
   if (target.kind === 'pin') {
     const single = await enrichSinglePin(target.normalizedUrl, target.boardId);
-    return [single];
+    return { pins: [single], totalBoardPins: 1 };
   }
 
   if (target.kind === 'video') {
-    return [
-      {
-        pinId: `vid_${hashId(target.normalizedUrl)}`,
-        boardId: target.boardId,
-        title: 'Imported Cooking Video',
-        description: '',
-        pinUrl: target.normalizedUrl,
-        mediaType: 'video',
-        imageUrl: '',
-        videoUrl: target.normalizedUrl,
-        creator: target.boardHandle || 'Video Recipe',
-      },
-    ];
+    return {
+      pins: [
+        {
+          pinId: `vid_${hashId(target.normalizedUrl)}`,
+          boardId: target.boardId,
+          title: 'Imported Cooking Video',
+          description: '',
+          pinUrl: target.normalizedUrl,
+          mediaType: 'video',
+          imageUrl: '',
+          videoUrl: target.normalizedUrl,
+          creator: target.boardHandle || 'Video Recipe',
+        },
+      ],
+      totalBoardPins: 1,
+    };
   }
 
   if (target.kind === 'blog') {
-    return [
-      {
-        pinId: `url_${hashId(target.normalizedUrl)}`,
-        boardId: target.boardId,
-        title: target.boardHandle || 'Web Recipe',
-        description: '',
-        pinUrl: target.normalizedUrl,
-        outboundUrl: target.normalizedUrl,
-        mediaType: 'blog',
-        imageUrl: '',
-        creator: target.boardHandle || 'Web Recipe',
-      },
-    ];
+    return {
+      pins: [
+        {
+          pinId: `url_${hashId(target.normalizedUrl)}`,
+          boardId: target.boardId,
+          title: target.boardHandle || 'Web Recipe',
+          description: '',
+          pinUrl: target.normalizedUrl,
+          outboundUrl: target.normalizedUrl,
+          mediaType: 'blog',
+          imageUrl: '',
+          creator: target.boardHandle || 'Web Recipe',
+        },
+      ],
+      totalBoardPins: 1,
+    };
   }
 
   const rssUrl = target.normalizedUrl.replace(/\/+$/, '') + '.rss';
-  const rssRes = await fetchTextWithTimeout(rssUrl, 15000);
+  const [rssRes, totalBoardPins] = await Promise.all([
+    fetchTextWithTimeout(rssUrl, 15000),
+    fetchPublicBoardPinCount(target.normalizedUrl),
+  ]);
   if (rssRes.status !== 200) {
     throw new Error(
       `Could not load Pinterest board feed (HTTP ${rssRes.status}). Check that the board is public or connect your Pinterest account.`,
@@ -526,7 +546,7 @@ export async function discoverPublicBoardPins(
 
   const creatorFallback = target.boardHandle?.split('/')[0]?.trim() || 'Pinterest Board';
   const pins = parseRssItems(rssRes.body, target.boardId, creatorFallback);
-  return pins.slice(0, maxPins);
+  return { pins: pins.slice(0, maxPins), totalBoardPins };
 }
 
 export async function extractJsonLdRecipe(blogUrl: string): Promise<JsonLdRecipeData | null> {

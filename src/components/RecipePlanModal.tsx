@@ -28,9 +28,12 @@ interface RecipePlanModalProps {
   recipe: Recipe;
   servings: number;
   selected: boolean;
+  madeIt: boolean;
   onClose: () => void;
   onChangeServings: (recipeId: string, nextServings: number) => void;
   onToggleSelect: (recipeId: string) => void;
+  onToggleMadeIt: (recipeId: string) => void;
+  onMarkMadeIt: (recipeId: string) => void;
   onStartTimer: (label: string, recipeTitle: string, minutes: number) => void;
   onSaveEdits: (updated: Recipe) => Promise<void>;
   onReExtract: (recipe: Recipe) => Promise<void>;
@@ -40,9 +43,12 @@ export function RecipePlanModal({
   recipe,
   servings,
   selected,
+  madeIt,
   onClose,
   onChangeServings,
   onToggleSelect,
+  onToggleMadeIt,
+  onMarkMadeIt,
   onStartTimer,
   onSaveEdits,
   onReExtract,
@@ -284,11 +290,14 @@ export function RecipePlanModal({
           ) : (
             <button
               type="button"
-              onClick={() => setCookMode(false)}
+              onClick={() => {
+                onMarkMadeIt(recipe.id);
+                setCookMode(false);
+              }}
               className="inline-flex items-center gap-2 rounded-xl bg-[#2D6A4F] px-6 py-3 text-sm font-bold text-white hover:bg-[#23543E]"
             >
               <Check className="h-4 w-4" />
-              Finish Cooking
+              Finish &amp; Mark as Made
             </button>
           )}
         </div>
@@ -432,12 +441,25 @@ export function RecipePlanModal({
                 onClick={() => onToggleSelect(recipe.id)}
                 className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-colors ${
                   selected
-                    ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
+                    ? 'border-[#1C1917] bg-[#1C1917] text-white'
                     : 'border-[#DED5C8] bg-white text-[#1C1917] hover:bg-[#FAF7F2]'
                 }`}
               >
                 <Check className="h-3.5 w-3.5" />
                 {selected ? 'In Weekly Basket' : 'Add to Basket'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onToggleMadeIt(recipe.id)}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-colors ${
+                  madeIt
+                    ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
+                    : 'border-[#DED5C8] bg-white text-[#443E38] hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
+                }`}
+              >
+                <Check className="h-3.5 w-3.5" />
+                {madeIt ? 'Made It' : 'Mark as Made'}
               </button>
 
               {!editing ? (

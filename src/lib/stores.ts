@@ -7,6 +7,9 @@ export interface StoreConfig {
   accentHex: string;
   pillActiveClass: string;
   linkClass: string;
+  supportsBulkPaste?: boolean;
+  bulkShopUrl?: string;
+  bulkShopNote?: string;
   getSearchUrl: (query: string) => string;
 }
 
@@ -18,6 +21,8 @@ export const STORES: Record<SupermarketKey, StoreConfig> = {
     accentHex: '#00539F',
     pillActiveClass: 'bg-[#00539F] text-white border-[#00539F]',
     linkClass: 'text-[#00539F] bg-[#00539F]/8 hover:bg-[#00539F]/15 border-[#00539F]/20',
+    bulkShopUrl: 'https://www.tesco.com/groceries/en-GB/',
+    bulkShopNote: 'Use Guided Rapid Shop to cycle items inside one single Tesco tab.',
     getSearchUrl: (q) => `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}`,
   },
   sainsburys: {
@@ -27,7 +32,21 @@ export const STORES: Record<SupermarketKey, StoreConfig> = {
     accentHex: '#D95D00',
     pillActiveClass: 'bg-[#D95D00] text-white border-[#D95D00]',
     linkClass: 'text-[#B84E00] bg-[#D95D00]/10 hover:bg-[#D95D00]/18 border-[#D95D00]/25',
+    bulkShopUrl: 'https://www.sainsburys.co.uk/gol-ui/groceries',
+    bulkShopNote: "Use Guided Rapid Shop to add every item inside one single Sainsbury's tab.",
     getSearchUrl: (q) => `https://www.sainsburys.co.uk/gol-ui/SearchResults/${encodeURIComponent(q)}`,
+  },
+  ocado: {
+    key: 'ocado',
+    name: 'Ocado',
+    shortName: 'Ocado',
+    accentHex: '#5E2750',
+    pillActiveClass: 'bg-[#5E2750] text-white border-[#5E2750]',
+    linkClass: 'text-[#5E2750] bg-[#5E2750]/10 hover:bg-[#5E2750]/18 border-[#5E2750]/25',
+    supportsBulkPaste: true,
+    bulkShopUrl: 'https://www.ocado.com/webshop/quickShop.do',
+    bulkShopNote: 'Ocado Quick Shop lets you paste the entire ingredient list at once and add all items on one page!',
+    getSearchUrl: (q) => `https://www.ocado.com/search?entry=${encodeURIComponent(q)}`,
   },
   asda: {
     key: 'asda',
@@ -36,6 +55,8 @@ export const STORES: Record<SupermarketKey, StoreConfig> = {
     accentHex: '#4F8A10',
     pillActiveClass: 'bg-[#4F8A10] text-white border-[#4F8A10]',
     linkClass: 'text-[#3F6F0D] bg-[#4F8A10]/10 hover:bg-[#4F8A10]/18 border-[#4F8A10]/25',
+    bulkShopUrl: 'https://groceries.asda.com/',
+    bulkShopNote: 'Use Guided Rapid Shop to cycle through every item in one Asda tab.',
     getSearchUrl: (q) => `https://groceries.asda.com/search/${encodeURIComponent(q)}`,
   },
   aldi: {
@@ -45,6 +66,8 @@ export const STORES: Record<SupermarketKey, StoreConfig> = {
     accentHex: '#00205B',
     pillActiveClass: 'bg-[#00205B] text-white border-[#00205B]',
     linkClass: 'text-[#00205B] bg-[#00205B]/8 hover:bg-[#00205B]/15 border-[#00205B]/20',
+    bulkShopUrl: 'https://groceries.aldi.co.uk/',
+    bulkShopNote: 'Use Guided Rapid Shop to browse and tick off your Aldi list.',
     getSearchUrl: (q) => `https://groceries.aldi.co.uk/en-GB/Search?keywords=${encodeURIComponent(q)}`,
   },
   lidl: {
@@ -54,6 +77,8 @@ export const STORES: Record<SupermarketKey, StoreConfig> = {
     accentHex: '#0050AA',
     pillActiveClass: 'bg-[#0050AA] text-white border-[#0050AA]',
     linkClass: 'text-[#0050AA] bg-[#0050AA]/8 hover:bg-[#0050AA]/15 border-[#0050AA]/20',
+    bulkShopUrl: 'https://www.lidl.co.uk/',
+    bulkShopNote: 'Copy the bulk list for in-store shopping at Lidl.',
     getSearchUrl: (q) => `https://www.lidl.co.uk/q/search?q=${encodeURIComponent(q)}`,
   },
 };

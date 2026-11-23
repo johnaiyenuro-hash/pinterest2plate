@@ -110,15 +110,15 @@ export async function fetchPinterestBoardPinsV5(
   accessToken: string,
   pinterestBoardId: string,
   internalBoardId: string,
-  maxPins = 50,
+  maxPins = 750,
 ): Promise<RawPin[]> {
   const allPins: RawPin[] = [];
   let bookmark: string | undefined;
   let pages = 0;
 
-  while (allPins.length < maxPins && pages < 4) {
+  while (allPins.length < maxPins && pages < 5) {
     pages++;
-    const pageSize = Math.min(100, maxPins - allPins.length);
+    const pageSize = Math.min(250, maxPins - allPins.length);
     const url = new URL(`https://api.pinterest.com/v5/boards/${pinterestBoardId}/pins`);
     url.searchParams.set('page_size', String(pageSize));
     if (bookmark) url.searchParams.set('bookmark', bookmark);

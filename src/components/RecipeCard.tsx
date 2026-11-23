@@ -3,6 +3,7 @@
 import {
   BookOpen,
   Check,
+  CheckCircle2,
   Clock,
   Film,
   Globe,
@@ -56,14 +57,18 @@ function SourceBadge({ sourceType }: { sourceType: Recipe['sourceType'] }) {
 interface RecipeCardProps {
   recipe: Recipe;
   selected: boolean;
+  madeIt: boolean;
   onToggleSelect: (id: string) => void;
+  onToggleMadeIt: (id: string) => void;
   onOpenPlan: (recipe: Recipe) => void;
 }
 
 export function RecipeCard({
   recipe,
   selected,
+  madeIt,
   onToggleSelect,
+  onToggleMadeIt,
   onOpenPlan,
 }: RecipeCardProps) {
   const totalMins = (recipe.prepMinutes || 0) + (recipe.cookMinutes || 0);
@@ -97,7 +102,15 @@ export function RecipeCard({
 
         {/* Top Row: Source Type + Selection Ring */}
         <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
-          <SourceBadge sourceType={recipe.sourceType} />
+          <div className="flex items-center gap-1.5">
+            <SourceBadge sourceType={recipe.sourceType} />
+            {madeIt && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#2D6A4F] px-2 py-1 text-[10px] font-bold text-white shadow-sm">
+                <CheckCircle2 className="h-3 w-3" />
+                Made
+              </span>
+            )}
+          </div>
 
           <button
             type="button"
@@ -153,24 +166,41 @@ export function RecipeCard({
         </div>
 
         {/* Footer */}
-        <div className="mt-4 flex items-center justify-between border-t border-[#F1EAE0] pt-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#575049]">
-            <span className="tabular-nums">{recipe.ingredients.length} ingredients</span>
-            <span className="text-[#D4C7B7]">·</span>
-            <span className="tabular-nums">{recipe.steps.length} steps</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenPlan(recipe);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#FAF7F2] px-2.5 py-1.5 text-xs font-semibold text-[#1C1917] border border-[#E8E1D7] transition-colors hover:border-[#D93B22] hover:bg-[#D93B22] hover:text-white"
+        <div className="mt-4 flex items-center justify-between gap-2 border-t border-[#F1EAE0] pt-3">
+          {/* Made It Checkbox */}
+          <label
+            onClick={(e) => e.stopPropagation()}
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
+              madeIt
+                ? 'bg-[#EBF3EC] text-[#2D6A4F]'
+                : 'text-[#6B645C] hover:bg-[#FAF7F2] hover:text-[#1C1917]'
+            }`}
           >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>View Plan</span>
-          </button>
+            <input
+              type="checkbox"
+              checked={madeIt}
+              onChange={() => onToggleMadeIt(recipe.id)}
+              className="h-3.5 w-3.5 rounded border-[#CFC3B4] accent-[#2D6A4F] cursor-pointer"
+            />
+            <span>Made it</span>
+          </label>
+
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline text-[11px] font-medium text-[#8A8177] tabular-nums">
+              {recipe.ingredients.length} ing · {recipe.steps.length} steps
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenPlan(recipe);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#FAF7F2] px-2.5 py-1.5 text-xs font-semibold text-[#1C1917] border border-[#E8E1D7] transition-colors hover:border-[#D93B22] hover:bg-[#D93B22] hover:text-white"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>View Plan</span>
+            </button>
+          </div>
         </div>
       </div>
     </article>

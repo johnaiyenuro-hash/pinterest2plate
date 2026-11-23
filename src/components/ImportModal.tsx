@@ -5,12 +5,16 @@ import {
   AlertTriangle,
   Bookmark,
   CheckCircle2,
+  Clock,
   Film,
   Image as ImageIcon,
+  Info,
   Link2,
   Loader2,
   Lock,
+  Shuffle,
   Sparkles,
+  Square,
   X,
   XCircle,
 } from 'lucide-react';
@@ -18,10 +22,17 @@ import type { Board, RawPin, Recipe } from '@/lib/types';
 
 export interface ExtractionProgressItem {
   pin: RawPin;
-  state: 'queued' | 'extracting' | 'ready' | 'skipped' | 'error';
+  state: 'queued' | 'extracting' | 'ready' | 'skipped' | 'cancelled' | 'error';
   recipeTitle?: string;
   sourceType?: Recipe['sourceType'];
   error?: string;
+}
+
+export interface DiscoverSummary {
+  totalBoardPins: number;
+  totalDiscovered: number;
+  cappedByPublicFeed: boolean;
+  unimportedAvailable: number;
 }
 
 interface RuntimeStatus {
@@ -36,10 +47,12 @@ interface ImportModalProps {
   initialUrl?: string;
   status: RuntimeStatus;
   progressItems: ExtractionProgressItem[];
+  discoverSummary: DiscoverSummary | null;
   isRunning: boolean;
   onClose: () => void;
-  onStartPublicImport: (url: string, maxPins: number) => Promise<void>;
-  onStartOAuthImport: (board: Board, maxPins: number) => Promise<void>;
+  onCancelImport: () => void;
+  onStartPublicImport: (url: string, maxPins: number, samplingMode: 'latest' | 'diverse') => Promise<void>;
+  onStartOAuthImport: (board: Board, maxPins: number, samplingMode: 'latest' | 'diverse') => Promise<void>;
   onDisconnectPinterest: () => Promise<void>;
 }
 
@@ -48,8 +61,10 @@ export function ImportModal({
   initialUrl,
   status,
   progressItems,
+  discoverSummary,
   isRunning,
   onClose,
+  onCancelImport,
   onStartPublicImport,
   onStartOAuthImport,
   onDisconnectPinterest,
@@ -57,6 +72,7 @@ export function ImportModal({
   const [tab, setTab] = useState<'url' | 'oauth'>('url');
   const [urlInput, setUrlInput] = useState(initialUrl || 'https://uk.pinterest.com/shalom_x/food');
   const [maxPins, setMaxPins] = useState(12);
+  const [samplingMode, setSamplingMode] = useState<'latest' | 'diverse'>('diverse');
   const [oauthBoards, setOAuthBoards] = useState<Board[]>([]);
   const [loadingBoards, setLoadingBoards] = useState(false);
   const [bookmarkletOrigin, setBookmarkletOrigin] = useState('https://pinterest-to-plate.vercel.app');
@@ -85,8 +101,14 @@ export function ImportModal({
 
   if (!open) return null;
 
-  const doneCount = progressItems.filter((p) => p.state === 'ready' || p.state === 'skipped').length;
-  const bookmarkletHref = `javascript:(function(){window.open('${bookmarkletOrigin}/?import='+encodeURIComponent(window.location.href),'_blank');})();`;
+  const doneCount = progressItems.filter(
+    (p) => p.state === 'ready' || p.state === 'skipped',
+  ).length;
+
+  // Smart Board & Pin Clipper Bookmarklet:
+  // If clicked while scrolled down a 600-pin Pinterest board, grabs up to 30 shuffled visible pin links!
+  // Otherwise clips the single current pin or recipe blog URL.
+  const bookmarkletHref = `javascript:(function(){var links=Array.from(document.querySelectorAll('a[href*="/pin/"]')).map(function(a){return a.href.split('?')[0];}).filter(function(u,i,arr){return /\\/pin\\/[^\\/]+/.test(u)&&arr.indexOf(u)===i;});if(links.length>2&&!/\\/pin\\//.test(location.pathname)){links.sort(function(){return Math.random()-0.5;});var batch=links.slice(0,25).join('\\n');window.open('${bookmarkletOrigin}/?importBatch='+encodeURIComponent(batch),'_blank');}else{window.open('${bookmarkletOrigin}/?import='+encodeURIComponent(location.href),'_blank');}})();`;
 
   return (
     <div
@@ -108,7 +130,7 @@ export function ImportModal({
               Gemini Multimodal Video &amp; Image Extractor
             </div>
             <h2 className="mt-1.5 font-serif text-xl font-semibold text-[#1C1917]">
-              Import Pinterest Board or Pin
+              Import Pinterest Board or Pins
             </h2>
           </div>
           <button
@@ -129,8 +151,8 @@ export function ImportModal({
               <div>
                 <p className="font-bold">GEMINI_API_KEY not configured yet</p>
                 <p className="mt-0.5 text-amber-900/80">
-                  Board discovery works right away, and adding <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">GEMINI_API_KEY</code> to{' '}
-                  <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">.env.local</code> or Vercel enables video &amp; image step-by-step extraction.
+                  Add <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">GEMINI_API_KEY</code> to{' '}
+                  <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">.env.local</code> or Vercel Environment Variables to read video &amp; image pins.
                 </p>
               </div>
             </div>
@@ -148,7 +170,7 @@ export function ImportModal({
               }`}
             >
               <Link2 className="h-3.5 w-3.5" />
-              Paste Board / Pin Link
+              Paste Board / Pin Link(s)
             </button>
             <button
               type="button"
@@ -160,72 +182,144 @@ export function ImportModal({
               }`}
             >
               <Lock className="h-3.5 w-3.5" />
-              Pinterest Account (OAuth)
+              Pinterest Account (All 600+ Pins)
             </button>
+          </div>
+
+          {/* Sampling Mode & Batch Size Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#EFE8DF] bg-[#FCFBF8] px-3.5 py-2.5 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-[#6B645C]">Pick:</span>
+              <button
+                type="button"
+                onClick={() => setSamplingMode('diverse')}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-bold transition-colors ${
+                  samplingMode === 'diverse'
+                    ? 'bg-[#1C1917] text-white'
+                    : 'bg-white border border-[#E8E1D7] text-[#575049] hover:border-[#CFC3B4]'
+                }`}
+              >
+                <Shuffle className="h-3 w-3" />
+                Diverse Mix
+              </button>
+              <button
+                type="button"
+                onClick={() => setSamplingMode('latest')}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-bold transition-colors ${
+                  samplingMode === 'latest'
+                    ? 'bg-[#1C1917] text-white'
+                    : 'bg-white border border-[#E8E1D7] text-[#575049] hover:border-[#CFC3B4]'
+                }`}
+              >
+                <Clock className="h-3 w-3" />
+                Latest
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[#6B645C]">
+              <span>Batch:</span>
+              {[6, 12, 25].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setMaxPins(n)}
+                  className={`rounded-lg px-2 py-1 font-bold tabular-nums ${
+                    maxPins === n
+                      ? 'bg-[#D93B22] text-white'
+                      : 'bg-white border border-[#E8E1D7] text-[#6B645C] hover:bg-[#EFE8DF]'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
 
           {tab === 'url' ? (
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#6B645C] mb-1.5">
-                  Pinterest Board, Single Pin, Blog, or Video (.mp4 / .m3u8) URL
+                  Pinterest Board, Multiple Pin URLs (1 per line), Blog, or Video (.mp4 / .m3u8)
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="Board URL, pinterest.com/pin/..., blog URL, or .m3u8/.mp4 video"
-                    className="flex-1 rounded-xl border border-[#DED5C8] bg-[#FCFBF8] px-3.5 py-2.5 text-xs font-medium text-[#1C1917] placeholder:text-[#A89E91] focus:border-[#D93B22] focus:bg-white focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={isRunning || !urlInput.trim()}
-                    onClick={() => onStartPublicImport(urlInput.trim(), maxPins)}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#D93B22] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#B82D17] disabled:opacity-50"
-                  >
-                    {isRunning ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Extract Pins
-                      </>
-                    )}
-                  </button>
-                </div>
+                <textarea
+                  rows={urlInput.includes('\n') ? 4 : 2}
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="Board URL (e.g. uk.pinterest.com/shalom_x/food), multiple pin URLs (1 per line), blog URL, or .m3u8/.mp4 video"
+                  className="w-full rounded-xl border border-[#DED5C8] bg-[#FCFBF8] px-3.5 py-2.5 text-xs font-medium text-[#1C1917] placeholder:text-[#A89E91] focus:border-[#D93B22] focus:bg-white focus:outline-none"
+                />
 
-                {/* Quick Presets + Pin Limit */}
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => setUrlInput('https://uk.pinterest.com/shalom_x/food')}
-                    className="font-semibold text-[#D93B22] hover:underline"
+                    className="text-[11px] font-semibold text-[#D93B22] hover:underline"
                   >
                     Use @shalom_x / Food board
                   </button>
 
-                  <div className="flex items-center gap-1.5 text-[#6B645C]">
-                    <span>Pins per sync:</span>
-                    {[6, 12, 25].map((n) => (
+                  <div className="flex items-center gap-2">
+                    {isRunning && (
                       <button
-                        key={n}
                         type="button"
-                        onClick={() => setMaxPins(n)}
-                        className={`rounded-lg px-2 py-0.5 font-bold tabular-nums ${
-                          maxPins === n
-                            ? 'bg-[#1C1917] text-white'
-                            : 'bg-[#FAF7F2] text-[#6B645C] hover:bg-[#EFE8DF]'
-                        }`}
+                        onClick={onCancelImport}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100"
                       >
-                        {n}
+                        <Square className="h-3 w-3 fill-current" />
+                        Cancel Import
                       </button>
-                    ))}
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={isRunning || !urlInput.trim()}
+                      onClick={() => onStartPublicImport(urlInput.trim(), maxPins, samplingMode)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#D93B22] px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#B82D17] disabled:opacity-50"
+                    >
+                      {isRunning ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Extracting...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Add New Pins
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
+              </div>
+
+              {/* 600+ Pin Public Feed Notice */}
+              {discoverSummary?.cappedByPublicFeed && (
+                <div className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50/80 p-3.5 text-xs text-sky-950">
+                  <Info className="h-4 w-4 shrink-0 text-sky-600 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>This board has {discoverSummary.totalBoardPins} pins</strong>, but Pinterest&apos;s public feed only returns the latest {discoverSummary.totalDiscovered}. To pull a diverse mix from further down your board, either <strong>scroll down in Pinterest and click the Board Clipper bookmarklet below</strong>, or connect <strong>Pinterest OAuth</strong> in the second tab.
+                  </p>
+                </div>
+              )}
+
+              {/* Upgraded Scrolled Board & Pin Clipper Bookmarklet */}
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#EFE8DF] bg-[#FAF7F2] px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[#1C1917]">
+                    Scrolled Board &amp; Pin Clipper (All 600+ Pins)
+                  </p>
+                  <p className="text-[11px] text-[#6B645C] leading-snug mt-0.5">
+                    Drag to your bookmarks bar. Scroll anywhere down your Pinterest board and click it to grab a random mix of up to 25 pins from where you scrolled!
+                  </p>
+                </div>
+                <a
+                  href={bookmarkletHref}
+                  onClick={(e) => e.preventDefault()}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[#D4C7B7] bg-white px-3 py-1.5 text-xs font-bold text-[#1C1917] shadow-sm cursor-grab active:cursor-grabbing"
+                >
+                  <Bookmark className="h-3.5 w-3.5 text-[#D93B22]" />
+                  Clip to Plate
+                </a>
               </div>
 
               {/* How Multimodal Extraction Works */}
@@ -251,27 +345,9 @@ export function ImportModal({
                     <Sparkles className="h-3.5 w-3.5 text-amber-600" /> Smart Filter
                   </span>
                   <p className="text-[#6B645C] leading-snug">
-                    Auto-skips storage charts &amp; non-recipes so your grid stays clean.
+                    Auto-skips storage charts &amp; already-imported pins so every sync adds fresh meals.
                   </p>
                 </div>
-              </div>
-
-              {/* Working Bookmarklet */}
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#EFE8DF] bg-[#FAF7F2] px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-[#1C1917]">1-Click Browser Clipper</p>
-                  <p className="text-[11px] text-[#6B645C]">
-                    Drag to your bookmarks bar to clip any Pinterest pin or recipe blog.
-                  </p>
-                </div>
-                <a
-                  href={bookmarkletHref}
-                  onClick={(e) => e.preventDefault()}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[#D4C7B7] bg-white px-3 py-1.5 text-xs font-bold text-[#1C1917] shadow-sm cursor-grab active:cursor-grabbing"
-                >
-                  <Bookmark className="h-3.5 w-3.5 text-[#D93B22]" />
-                  Send to Plate
-                </a>
               </div>
             </div>
           ) : (
@@ -280,11 +356,11 @@ export function ImportModal({
                 <div className="rounded-2xl border border-[#E8E1D7] bg-[#FAF7F2] p-5 text-center space-y-2">
                   <Lock className="mx-auto h-7 w-7 text-[#8A8177]" />
                   <h3 className="font-serif text-base font-semibold text-[#1C1917]">
-                    Connect Private &amp; Large Pinterest Boards
+                    Sample Across All 600+ Pins with Pinterest OAuth
                   </h3>
                   <p className="text-xs text-[#6B645C] leading-relaxed">
                     Add <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_ID</code> and{' '}
-                    <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_SECRET</code> in your environment to enable official Pinterest API v5 OAuth with direct 720p MP4 video access and up to 500+ pins per board.
+                    <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_SECRET</code> in Vercel to paginate through up to 750 pins per board (including private boards &amp; 720p MP4 videos) and randomly sample a diverse set each time.
                   </p>
                 </div>
               ) : !status.pinterestConnected ? (
@@ -293,7 +369,7 @@ export function ImportModal({
                     Sign in with Pinterest
                   </h3>
                   <p className="text-xs text-[#6B645C]">
-                    Import public or secret boards with full HD image &amp; MP4 video streams.
+                    Paginate through all 600+ pins on your boards with Diverse Mix sampling and direct MP4 video access.
                   </p>
                   <a
                     href="/api/pinterest/auth"
@@ -308,13 +384,25 @@ export function ImportModal({
                     <span className="text-xs font-bold text-[#2D6A4F]">
                       Connected to Pinterest API v5
                     </span>
-                    <button
-                      type="button"
-                      onClick={onDisconnectPinterest}
-                      className="text-xs font-semibold text-[#8A8177] hover:text-[#D93B22]"
-                    >
-                      Disconnect
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {isRunning && (
+                        <button
+                          type="button"
+                          onClick={onCancelImport}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:underline"
+                        >
+                          <Square className="h-3 w-3 fill-current" />
+                          Cancel Import
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onDisconnectPinterest}
+                        className="text-xs font-semibold text-[#8A8177] hover:text-[#D93B22]"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
                   </div>
 
                   {loadingBoards ? (
@@ -338,10 +426,10 @@ export function ImportModal({
                           <button
                             type="button"
                             disabled={isRunning}
-                            onClick={() => onStartOAuthImport(b, maxPins)}
+                            onClick={() => onStartOAuthImport(b, maxPins, samplingMode)}
                             className="rounded-xl bg-[#1C1917] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#332E2A] disabled:opacity-50"
                           >
-                            Import
+                            Import {maxPins}
                           </button>
                         </div>
                       ))}
@@ -360,10 +448,14 @@ export function ImportModal({
                   Extraction Progress ({doneCount}/{progressItems.length})
                 </span>
                 {isRunning && (
-                  <span className="inline-flex items-center gap-1.5 text-[#D93B22] font-semibold">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Processing pins...
-                  </span>
+                  <button
+                    type="button"
+                    onClick={onCancelImport}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                  >
+                    <Square className="h-2.5 w-2.5 fill-current" />
+                    Stop
+                  </button>
                 )}
               </div>
 
@@ -391,6 +483,7 @@ export function ImportModal({
                           {item.state === 'extracting' && 'Reading video/image with Gemini...'}
                           {item.state === 'ready' && `Ready (${item.sourceType || item.pin.mediaType})`}
                           {item.state === 'skipped' && 'Skipped — Not a cookable recipe'}
+                          {item.state === 'cancelled' && 'Cancelled'}
                           {item.state === 'error' && (item.error || 'Extraction failed')}
                         </p>
                       </div>
@@ -411,6 +504,11 @@ export function ImportModal({
                       {item.state === 'skipped' && (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                           Skipped
+                        </span>
+                      )}
+                      {item.state === 'cancelled' && (
+                        <span className="rounded-full bg-[#EFE8DF] px-2 py-0.5 text-[10px] font-bold text-[#8A8177]">
+                          Cancelled
                         </span>
                       )}
                       {item.state === 'error' && <XCircle className="h-4 w-4 text-red-500" />}

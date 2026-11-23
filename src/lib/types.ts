@@ -106,7 +106,7 @@ export interface RawPin {
   creator: string;
 }
 
-export type SupermarketKey = 'tesco' | 'sainsburys' | 'asda' | 'aldi' | 'lidl';
+export type SupermarketKey = 'tesco' | 'sainsburys' | 'ocado' | 'asda' | 'aldi' | 'lidl';
 
 export interface ConsolidatedItem {
   key: string;
