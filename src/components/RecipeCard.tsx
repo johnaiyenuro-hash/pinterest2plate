@@ -20,35 +20,35 @@ function SourceBadge({ sourceType }: { sourceType: Recipe['sourceType'] }) {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917]/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
           <Film className="h-3 w-3 text-[#FB7185]" />
-          Video Pin
+          Video
         </span>
       );
     case 'carousel':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917]/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
           <Layers className="h-3 w-3 text-amber-300" />
-          Carousel
+          Multi-photo
         </span>
       );
     case 'blog':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917]/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
           <Globe className="h-3 w-3 text-emerald-300" />
-          Blog Recipe
+          Web
         </span>
       );
     case 'image':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917]/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
           <ImageIcon className="h-3 w-3 text-sky-300" />
-          Image Pin
+          Photo
         </span>
       );
     default:
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#1C1917] shadow-sm backdrop-blur-md">
           <Sparkles className="h-3 w-3 text-[#D93B22]" />
-          Curated
+          Starter
         </span>
       );
   }
@@ -198,7 +198,7 @@ export function RecipeCard({
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#FAF7F2] px-2.5 py-1.5 text-xs font-semibold text-[#1C1917] border border-[#E8E1D7] transition-colors hover:border-[#D93B22] hover:bg-[#D93B22] hover:text-white"
             >
               <BookOpen className="h-3.5 w-3.5" />
-              <span>View Plan</span>
+              <span>Recipe</span>
             </button>
           </div>
         </div>
@@ -229,7 +229,7 @@ export function ExtractingPinCard({
           <div className="mb-2 h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           <span className="text-xs font-semibold tracking-wide">{statusLabel}</span>
           <span className="mt-1 text-[11px] text-white/80">
-            {pin.mediaType === 'video' ? 'Analyzing video audio & visuals' : 'Reading recipe image & text'}
+            {pin.mediaType === 'video' ? 'Watching video & noting steps' : 'Reading recipe & ingredients'}
           </span>
         </div>
       </div>

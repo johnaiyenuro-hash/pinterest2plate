@@ -351,7 +351,7 @@ export function RecipePlanModal({
                   {recipe.sourceType === 'video' && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1917] px-2.5 py-0.5 text-[11px] font-semibold text-white">
                       <Film className="h-3 w-3 text-[#FB7185]" />
-                      Extracted from Video
+                      From Video
                     </span>
                   )}
                 </div>
@@ -432,7 +432,7 @@ export function RecipePlanModal({
                   className="inline-flex items-center gap-2 rounded-xl bg-[#D93B22] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#B82D17]"
                 >
                   <Play className="h-3.5 w-3.5 fill-current" />
-                  Start Cook Mode
+                  Start Cooking
                 </button>
               )}
 
@@ -446,7 +446,7 @@ export function RecipePlanModal({
                 }`}
               >
                 <Check className="h-3.5 w-3.5" />
-                {selected ? 'In Weekly Basket' : 'Add to Basket'}
+                {selected ? 'On Shopping List' : 'Add to List'}
               </button>
 
               <button
@@ -489,10 +489,10 @@ export function RecipePlanModal({
                   disabled={reExtracting}
                   onClick={handleReExtractClick}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3 py-2.5 text-xs font-semibold text-[#575049] hover:bg-[#FAF7F2] disabled:opacity-50"
-                  title="Re-analyze this pin with Gemini"
+                  title="Re-read this pin to refresh the recipe"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${reExtracting ? 'animate-spin' : ''}`} />
-                  {reExtracting ? 'Re-reading...' : 'Re-extract'}
+                  {reExtracting ? 'Refreshing...' : 'Refresh'}
                 </button>
               )}
             </div>

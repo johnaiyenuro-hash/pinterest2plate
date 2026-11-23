@@ -22,36 +22,36 @@
     <!-- Section 1: Pinterest Board Auto-Scroller -->
     <section class="card" id="sec-pinterest">
       <div class="card-head">
-        <span class="badge badge-red">Pinterest Collector</span>
+        <span class="badge badge-red">Pinterest</span>
         <span id="pinterest-page-status" class="muted">Checking tab...</span>
       </div>
-      <h2>Grab Diverse Pins from Board</h2>
+      <h2>Grab Recipes from This Board</h2>
       <p class="desc">
-        Auto-scrolls your logged-in Pinterest board (all 600+ pins), collects a diverse shuffled batch, and sends them straight to P!nterest2Plate.
+        Scrolls down your Pinterest board, picks a fresh random mix of pins, and sends them straight to P!nterest2Plate.
       </p>
 
       <div class="row">
-        <label class="field-label" for="scroll-steps">Scroll depth:</label>
+        <label class="field-label" for="scroll-steps">How far to scroll:</label>
         <select id="scroll-steps" class="select">
-          <option value="3">Quick (~40 pins scanned)</option>
-          <option value="8" selected>Medium (~120 pins scanned)</option>
-          <option value="18">Deep (~300+ pins scanned)</option>
-          <option value="35">Full Board (~600+ pins)</option>
+          <option value="3">Quick (~40 pins)</option>
+          <option value="8" selected>Medium (~120 pins)</option>
+          <option value="18">Deep (~300+ pins)</option>
+          <option value="35">Whole Board (~600+ pins)</option>
         </select>
       </div>
 
       <div class="row">
-        <label class="field-label" for="sample-count">Send diverse mix:</label>
+        <label class="field-label" for="sample-count">Recipes to send:</label>
         <select id="sample-count" class="select">
-          <option value="6">6 pins</option>
-          <option value="12" selected>12 pins</option>
-          <option value="20">20 pins</option>
-          <option value="30">30 pins</option>
+          <option value="6">6 recipes</option>
+          <option value="12" selected>12 recipes</option>
+          <option value="20">20 recipes</option>
+          <option value="30">30 recipes</option>
         </select>
       </div>
 
       <div class="btn-row">
-        <button id="btn-collect-board" class="btn-primary">Auto-Scroll &amp; Grab Pins</button>
+        <button id="btn-collect-board" class="btn-primary">Scroll &amp; Grab Recipes</button>
         <button id="btn-cancel-collect" class="btn-danger hidden">Stop</button>
       </div>
       <div id="collect-status" class="status hidden"></div>
@@ -60,12 +60,12 @@
     <!-- Section 2: UK Supermarket Auto-Trolley -->
     <section class="card" id="sec-shop">
       <div class="card-head">
-        <span class="badge badge-green">Single-Basket Trolley</span>
-        <span id="basket-summary" class="muted">No basket synced yet</span>
+        <span class="badge badge-green">Supermarket</span>
+        <span id="basket-summary" class="muted">No list ready yet</span>
       </div>
-      <h2>Auto-Fill UK Supermarket Trolley</h2>
+      <h2>Fill Your Supermarket Trolley</h2>
       <p class="desc">
-        Steps through your consolidated P!nterest2Plate basket inside one supermarket tab and clicks Add to Trolley automatically.
+        Goes through your shopping list in one tab and helps add each item to your trolley.
       </p>
 
       <div class="row">

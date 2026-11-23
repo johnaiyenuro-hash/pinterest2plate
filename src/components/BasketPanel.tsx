@@ -154,11 +154,11 @@ export function BasketPanel({
               </div>
               <div>
                 <h2 className="font-serif text-lg font-semibold text-[#1C1917] leading-tight">
-                  Weekly Basket
+                  Shopping List
                 </h2>
                 <p className="text-xs text-[#6B645C]">
                   {selectedRecipes.length === 0
-                    ? 'Select meals to consolidate'
+                    ? 'Tap dishes on the left to start'
                     : `${selectedRecipes.length} meal${selectedRecipes.length === 1 ? '' : 's'} · ${remainingToBuyCount} to buy`}
                 </p>
               </div>
@@ -215,9 +215,9 @@ export function BasketPanel({
           {/* UK Supermarket Switcher (6 stores, 3x2 clean grid) */}
           <div className="mt-4">
             <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#8A8177]">
-              <span>UK Supermarket</span>
+              <span>Supermarket</span>
               {storeConfig.supportsBulkPaste && (
-                <span className="text-[#5E2750]">1-Paste Quick Shop</span>
+                <span className="text-[#5E2750]">Bulk paste supported</span>
               )}
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -264,7 +264,7 @@ export function BasketPanel({
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-[#332E2A] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Copy className="h-3.5 w-3.5" />
-              <span>Copy for WhatsApp</span>
+              <span>Share / WhatsApp</span>
             </button>
 
             <button
@@ -289,10 +289,10 @@ export function BasketPanel({
               onChange={(e) => onToggleHidePantry(e.target.checked)}
               className="h-4 w-4 rounded border-[#2D6A4F]/40 accent-[#2D6A4F]"
             />
-            <span>Hide pantry staples</span>
+            <span>Hide basics I have (oil, salt, flour)</span>
           </label>
           <span className="font-semibold text-[#2D6A4F]/80 tabular-nums">
-            {basket.pantryCount} detected
+            {basket.pantryCount} basics
           </span>
         </div>
 
@@ -304,10 +304,10 @@ export function BasketPanel({
                 <Sparkles className="h-6 w-6" />
               </div>
               <p className="font-serif text-base font-semibold text-[#1C1917]">
-                Your basket is empty
+                Your list is empty
               </p>
               <p className="mt-1 text-xs text-[#6B645C] max-w-[220px] mx-auto">
-                Tap 2 or 3 dishes on the left and we&apos;ll merge quantities by UK supermarket aisle.
+                Tap a few meals on the left and we&apos;ll combine every ingredient by aisle.
               </p>
             </div>
           ) : visibleAisles.length === 0 ? (

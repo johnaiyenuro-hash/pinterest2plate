@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { BasketPanel } from './BasketPanel';
-import { ImportModal, type DiscoverSummary, type ExtractionProgressItem } from './ImportModal';
+import { ImportModal, type ExtractionProgressItem } from './ImportModal';
 import { KitchenTimerBar, type ActiveTimer } from './KitchenTimerBar';
 import { ExtractingPinCard, RecipeCard } from './RecipeCard';
 import { RecipePlanModal } from './RecipePlanModal';
@@ -91,7 +91,6 @@ export function MealPlannerApp({
 
   // Extraction state + AbortController for Cancel Import
   const [progressItems, setProgressItems] = useState<ExtractionProgressItem[]>([]);
-  const [discoverSummary, setDiscoverSummary] = useState<DiscoverSummary | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extensionReady, setExtensionReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -465,31 +464,23 @@ export function MealPlannerApp({
     [mergeRecipeIntoState, notify, persistLocalCache, recipes],
   );
 
-  const handleStartPublicImport = useCallback(
-    async (url: string, maxPins: number, samplingMode: 'latest' | 'diverse') => {
+  const handleStartSingleLinkImport = useCallback(
+    async (url: string) => {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setExtracting(true);
       setProgressItems([]);
-      setDiscoverSummary(null);
 
       try {
         const excludeIds = recipes.map((r) => r.id);
         const res = await fetch('/api/boards/discover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, maxPins, samplingMode, excludeIds }),
+          body: JSON.stringify({ url, maxPins: 6, samplingMode: 'latest', excludeIds }),
           signal: controller.signal,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Could not discover board pins');
-
-        setDiscoverSummary({
-          totalBoardPins: data.totalBoardPins ?? data.totalDiscovered ?? 0,
-          totalDiscovered: data.totalDiscovered ?? 0,
-          cappedByPublicFeed: Boolean(data.cappedByPublicFeed),
-          unimportedAvailable: data.unimportedAvailable ?? 0,
-        });
+        if (!res.ok) throw new Error(data.error || 'Could not read that link');
 
         await runBatchExtraction(
           data.board,
@@ -501,55 +492,7 @@ export function MealPlannerApp({
       } catch (err) {
         if (controller.signal.aborted) return;
         setExtracting(false);
-        notify(err instanceof Error ? err.message : 'Import failed');
-      }
-    },
-    [notify, recipes, runBatchExtraction],
-  );
-
-  const handleStartOAuthImport = useCallback(
-    async (board: Board, maxPins: number, samplingMode: 'latest' | 'diverse') => {
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      setExtracting(true);
-      setProgressItems([]);
-      setDiscoverSummary(null);
-
-      try {
-        const excludeIds = recipes.map((r) => r.id);
-        const res = await fetch('/api/boards/discover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            oauthBoardId: board.id,
-            boardName: board.name,
-            maxPins,
-            samplingMode,
-            excludeIds,
-          }),
-          signal: controller.signal,
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Could not sync Pinterest board');
-
-        setDiscoverSummary({
-          totalBoardPins: data.totalBoardPins ?? data.totalDiscovered ?? 0,
-          totalDiscovered: data.totalDiscovered ?? 0,
-          cappedByPublicFeed: false,
-          unimportedAvailable: data.unimportedAvailable ?? 0,
-        });
-
-        await runBatchExtraction(
-          data.board,
-          data.cachedRecipes || [],
-          data.pendingPins || [],
-          true,
-          controller,
-        );
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setExtracting(false);
-        notify(err instanceof Error ? err.message : 'OAuth board import failed');
+        notify(err instanceof Error ? err.message : 'Could not add that recipe');
       }
     },
     [notify, recipes, runBatchExtraction],
@@ -829,7 +772,7 @@ export function MealPlannerApp({
                   P!nterest<span className="text-[#D93B22]">2</span>Plate
                 </span>
                 <p className="hidden sm:block text-[11px] text-[#8A8177] mt-0.5">
-                  Pins to step-by-step plans &amp; UK baskets
+                  Saved pins to dinner plans &amp; shopping lists
                 </p>
               </div>
             </div>
@@ -910,11 +853,11 @@ export function MealPlannerApp({
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {runtimeStatus.storageMode === 'postgres' && (
               <span
-                title="Synced across your devices via Postgres"
+                title="Synced across your phone and laptop"
                 className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-[#2D6A4F]/25 bg-[#F5F8F4] px-2.5 py-1 text-[11px] font-semibold text-[#2D6A4F]"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2D6A4F]" />
-                Cloud Synced
+                Synced
               </span>
             )}
             {extracting && (
@@ -924,7 +867,7 @@ export function MealPlannerApp({
                 className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-red-300 bg-red-50 px-2.5 sm:px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
               >
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span className="hidden sm:inline">Cancel Import</span>
+                <span className="hidden sm:inline">Stop</span>
                 <Square className="h-3 w-3 fill-current sm:hidden" />
               </button>
             )}
@@ -935,8 +878,7 @@ export function MealPlannerApp({
               className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-[#D93B22] px-3 sm:px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#B82D17] active:scale-[0.98]"
             >
               <Plus className="h-4 w-4 shrink-0" />
-              <span className="sm:hidden">Import</span>
-              <span className="hidden sm:inline">Import Board / Pin</span>
+              <span>Add Recipes</span>
             </button>
 
             <button
@@ -989,10 +931,10 @@ export function MealPlannerApp({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-[#1C1917]">
-                What&apos;s on the menu this week?
+                What&apos;s for dinner this week?
               </h1>
               <p className="mt-1 text-sm text-[#6B645C]">
-                Pick your dishes to consolidate ingredients, tick off ones you&apos;ve made, or open any card to cook.
+                Tap dishes to build your shopping list, tick off ones you&apos;ve made, or open any recipe to cook.
               </p>
             </div>
 
@@ -1003,7 +945,7 @@ export function MealPlannerApp({
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#332E2A] active:scale-[0.98]"
               >
                 <Dices className="h-4 w-4 text-[#F97316]" />
-                {toTryCount >= 5 ? 'Pick 5 Untried' : 'Pick 5 for Me'}
+                {toTryCount >= 5 ? 'Pick 5 New Meals' : 'Pick 5 for Me'}
               </button>
               {selectedIds.length > 0 && (
                 <button
@@ -1104,7 +1046,7 @@ export function MealPlannerApp({
                     : 'bg-[#FAF7F2] text-[#575049] hover:bg-[#EFE8DF]'
                 }`}
               >
-                All Styles <span className="opacity-70 tabular-nums">({categoryCounts.all || 0})</span>
+                All Meals <span className="opacity-70 tabular-nums">({categoryCounts.all || 0})</span>
               </button>
               {RECIPE_CATEGORIES.map((cat) => {
                 const count = categoryCounts[cat] || 0;
@@ -1137,7 +1079,7 @@ export function MealPlannerApp({
                     : 'border-[#EFE8DF] bg-white text-[#6B645C] hover:border-[#D4C7B7]'
                 }`}
               >
-                All Ingredients
+                Any Ingredient
               </button>
               {FOOD_TABS.map((tab) => {
                 const count = foodTabCounts[tab.id] || 0;
@@ -1181,11 +1123,11 @@ export function MealPlannerApp({
                   className="inline-flex items-center gap-1 font-semibold text-amber-700 hover:underline"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  {skippedRecipes.length} non-recipe pin{skippedRecipes.length === 1 ? '' : 's'} filtered out
+                  {skippedRecipes.length} skipped pin{skippedRecipes.length === 1 ? '' : 's'}
                 </button>
               )}
               <span className="hidden sm:inline text-[#8A8177]">
-                Tap a card to select · Tick &ldquo;Made it&rdquo; once cooked
+                Tap a card to add to list · Tick &ldquo;Made it&rdquo; once cooked
               </span>
             </div>
           </div>
@@ -1230,7 +1172,7 @@ export function MealPlannerApp({
                   key={item.pin.pinId}
                   pin={item.pin}
                   statusLabel={
-                    item.state === 'extracting' ? 'Reading with Gemini...' : 'Queued for extraction'
+                    item.state === 'extracting' ? 'Reading recipe...' : 'Waiting...'
                   }
                 />
               ))}
@@ -1284,10 +1226,10 @@ export function MealPlannerApp({
               </div>
               <div className="text-left">
                 <p className="text-xs font-bold leading-tight">
-                  View Weekly Basket ({selectedIds.length} meal{selectedIds.length === 1 ? '' : 's'})
+                  Shopping List ({selectedIds.length} meal{selectedIds.length === 1 ? '' : 's'})
                 </p>
                 <p className="text-[11px] text-white/70 tabular-nums">
-                  {printBasket.totalIngredients} consolidated ingredients · {(STORES[currentStore] || STORES.tesco).name}
+                  {printBasket.totalIngredients} items · {(STORES[currentStore] || STORES.tesco).name}
                 </p>
               </div>
             </div>
@@ -1355,10 +1297,10 @@ export function MealPlannerApp({
             <div className="flex items-center justify-between border-b border-[#EFE8DF] px-5 py-4">
               <div>
                 <h2 className="font-serif text-lg font-semibold text-[#1C1917]">
-                  Filtered Non-Recipe Pins
+                  Skipped Pins
                 </h2>
                 <p className="text-xs text-[#6B645C]">
-                  Infographics, storage charts, or tips automatically kept out of your meal grid.
+                  Pins that didn&apos;t look like recipes (like food charts or tips).
                 </p>
               </div>
               <button
@@ -1388,7 +1330,7 @@ export function MealPlannerApp({
                       className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#1C1917] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#D93B22]"
                     >
                       <BookOpen className="h-3 w-3" />
-                      Extract Anyway
+                      Add Anyway
                     </button>
                   </div>
                 </div>
@@ -1418,24 +1360,17 @@ export function MealPlannerApp({
         />
       )}
 
-      {/* Import Board / Pin Modal */}
+      {/* Add Recipes Modal */}
       <ImportModal
         open={importOpen}
         initialUrl={importInitialUrl}
         status={runtimeStatus}
         extensionReady={extensionReady}
         progressItems={progressItems}
-        discoverSummary={discoverSummary}
         isRunning={extracting}
         onClose={() => setImportOpen(false)}
         onCancelImport={handleCancelImport}
-        onStartPublicImport={handleStartPublicImport}
-        onStartOAuthImport={handleStartOAuthImport}
-        onDisconnectPinterest={async () => {
-          await fetch('/api/pinterest/boards', { method: 'DELETE' });
-          setRuntimeStatus((s) => ({ ...s, pinterestConnected: false }));
-          notify('Disconnected Pinterest account');
-        }}
+        onStartSingleLinkImport={handleStartSingleLinkImport}
       />
 
       {/* Floating Active Kitchen Timers */}

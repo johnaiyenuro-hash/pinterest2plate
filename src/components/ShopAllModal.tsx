@@ -104,10 +104,10 @@ export function ShopAllModal({
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#2D6A4F]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#2D6A4F]">
               <ShoppingCart className="h-3 w-3" />
-              Single-Basket Shop Flow · {store.name}
+              Shop at {store.name}
             </div>
             <h2 className="mt-1.5 font-serif text-xl font-semibold text-[#1C1917]">
-              Add All Ingredients to {store.name}
+              Add Everything to {store.name}
             </h2>
           </div>
           <button
@@ -132,7 +132,7 @@ export function ShopAllModal({
                   : 'text-[#6B645C] hover:text-[#1C1917]'
               }`}
             >
-              1-Tab Rapid Queue ({remainingItems.length})
+              Go One by One ({remainingItems.length})
             </button>
             <button
               type="button"
@@ -143,7 +143,7 @@ export function ShopAllModal({
                   : 'text-[#6B645C] hover:text-[#1C1917]'
               }`}
             >
-              Bulk Quick-Shop Paste
+              Copy Full List
             </button>
           </div>
         </div>
