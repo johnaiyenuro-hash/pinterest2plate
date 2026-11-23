@@ -742,15 +742,15 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     <div className="min-h-screen flex flex-col">
       {/* Slim Sticky Editorial Header */}
       <header className="no-print sticky top-0 z-40 border-b border-[#E8E1D7] bg-[#FAF7F2]/92 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1380px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-          {/* Brand + Board Switcher */}
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#D93B22] text-white shadow-sm">
-                <UtensilsCrossed className="h-5 w-5" />
+        <div className="mx-auto flex h-15 sm:h-16 max-w-[1380px] items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+          {/* Brand + Desktop Board Switcher */}
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-[#D93B22] text-white shadow-sm">
+                <UtensilsCrossed className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="leading-none">
-                <span className="font-serif text-xl font-bold tracking-tight text-[#1C1917]">
+                <span className="font-serif text-lg sm:text-xl font-bold tracking-tight text-[#1C1917]">
                   P!nterest<span className="text-[#D93B22]">2</span>Plate
                 </span>
                 <p className="hidden sm:block text-[11px] text-[#8A8177] mt-0.5">
@@ -761,15 +761,15 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
             <div className="hidden md:block h-6 w-px bg-[#E8E1D7]" />
 
-            {/* Board Switcher Dropdown */}
-            <div className="relative">
+            {/* Desktop Board Switcher Dropdown */}
+            <div className="relative hidden md:block">
               <button
                 type="button"
                 onClick={() => setBoardMenuOpen((v) => !v)}
                 className="inline-flex items-center gap-2 rounded-xl border border-[#E8E1D7] bg-white px-3 py-1.5 text-xs font-semibold text-[#1C1917] shadow-xs transition-colors hover:border-[#CFC3B4]"
               >
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[#2D6A4F]" />
-                <span className="max-w-[100px] sm:max-w-[160px] truncate">{activeBoardLabel}</span>
+                <span className="max-w-[180px] truncate">{activeBoardLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#8A8177]" />
               </button>
 
@@ -832,12 +832,12 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {extracting && (
               <button
                 type="button"
                 onClick={handleCancelImport}
-                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-red-300 bg-red-50 px-2.5 sm:px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
               >
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span className="hidden sm:inline">Cancel Import</span>
@@ -858,12 +858,42 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
             <button
               type="button"
               onClick={() => setMobileBasketOpen(true)}
-              className="lg:hidden inline-flex items-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3 py-2 text-xs font-bold text-[#1C1917]"
+              aria-label="Open Weekly Basket"
+              className="lg:hidden inline-flex items-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-2.5 py-2 text-xs font-bold text-[#1C1917]"
             >
               <ShoppingBasket className="h-4 w-4 text-[#D93B22]" />
               <span className="tabular-nums">{selectedIds.length}</span>
             </button>
           </div>
+        </div>
+
+        {/* Mobile Board Switcher Sub-Row (zero overlap on 360px-767px phones) */}
+        <div className="md:hidden border-t border-[#EFE8DF] px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar bg-[#FCFBF8]/90">
+          <button
+            type="button"
+            onClick={() => setActiveBoardId('all')}
+            className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold ${
+              activeBoardId === 'all'
+                ? 'bg-[#2D6A4F] text-white'
+                : 'bg-white border border-[#E8E1D7] text-[#575049]'
+            }`}
+          >
+            All Boards ({recipes.filter((r) => r.status === 'ready').length})
+          </button>
+          {boards.map((board) => (
+            <button
+              key={board.id}
+              type="button"
+              onClick={() => setActiveBoardId(board.id)}
+              className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold ${
+                activeBoardId === board.id
+                  ? 'bg-[#2D6A4F] text-white font-bold'
+                  : 'bg-white border border-[#E8E1D7] text-[#575049]'
+              }`}
+            >
+              {board.name} ({recipes.filter((r) => r.boardId === board.id && r.status === 'ready').length})
+            </button>
+          ))}
         </div>
       </header>
 
