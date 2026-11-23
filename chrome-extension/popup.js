@@ -36,16 +36,28 @@ async function initPopup() {
     btnCollectBoard.disabled = true;
   }
 
-  chrome.storage.local.get(['p2p_basket', 'p2p_app_origin'], (data) => {
+  chrome.storage.local.get(['p2p_basket', 'p2p_app_origin', 'p2p_shop_session'], (data) => {
     const basket = data.p2p_basket;
+    const savedSession = data.p2p_shop_session;
+    const sessionPending = (savedSession?.items || []).filter((i) => i.status === 'pending').length;
     const needed = (basket?.items || []).filter((i) => !i.checked);
-    if (needed.length > 0) {
+
+    if (savedSession?.active && sessionPending > 0) {
+      basketSummary.textContent = `Paused: ${sessionPending} items saved`;
+      if (['tesco', 'sainsburys', 'ocado', 'asda'].includes(savedSession.store)) {
+        shopStoreSelect.value = savedSession.store;
+      }
+      btnStartShop.disabled = false;
+      btnStartShop.textContent = `Resume ${shopStoreSelect.options[shopStoreSelect.selectedIndex].text} (${sessionPending} left)`;
+      btnStartShop.dataset.mode = 'resume';
+    } else if (needed.length > 0) {
       basketSummary.textContent = `${needed.length} items ready (${basket.mealsCount || 1} meals)`;
       if (basket.store && ['tesco', 'sainsburys', 'ocado', 'asda'].includes(basket.store)) {
         shopStoreSelect.value = basket.store;
       }
       btnStartShop.disabled = false;
       btnStartShop.textContent = `Fill ${shopStoreSelect.options[shopStoreSelect.selectedIndex].text} Trolley (${needed.length})`;
+      btnStartShop.dataset.mode = 'start';
     } else {
       basketSummary.textContent = 'Open P!nterest2Plate & select meals';
       btnStartShop.disabled = true;
@@ -118,23 +130,22 @@ btnCancelCollect.onclick = () => {
 btnStartShop.onclick = () => {
   const store = shopStoreSelect.value;
   const autoAdd = chkAutoAdd.checked;
+  const isResume = btnStartShop.dataset.mode === 'resume';
   btnStartShop.disabled = true;
-  showStatus(shopStatus, `Opening ${store} and starting Trolley Assistant...`);
+  showStatus(shopStatus, isResume ? 'Resuming your saved trolley list...' : `Opening ${store} and starting Trolley Assistant...`);
 
-  chrome.runtime.sendMessage(
-    {
-      type: 'P2P_START_SHOPPING',
-      payload: { store, autoAdd },
-    },
-    (res) => {
-      if (!res || !res.ok) {
-        btnStartShop.disabled = false;
-        showStatus(shopStatus, res?.error || 'Could not start shopping session.');
-      } else {
-        window.close();
-      }
-    },
-  );
+  const msg = isResume
+    ? { type: 'P2P_RESUME_SHOPPING', payload: { tabId: activeTabId } }
+    : { type: 'P2P_START_SHOPPING', payload: { store, autoAdd } };
+
+  chrome.runtime.sendMessage(msg, (res) => {
+    if (!res || !res.ok) {
+      btnStartShop.disabled = false;
+      showStatus(shopStatus, res?.error || 'Could not start shopping session.');
+    } else {
+      window.close();
+    }
+  });
 };
 
 initPopup();

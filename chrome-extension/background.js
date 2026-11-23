@@ -119,6 +119,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'P2P_PAUSE_FOR_LOGIN') {
+    chrome.storage.local.get(['p2p_shop_session'], async (data) => {
+      const session = data.p2p_shop_session;
+      if (session) {
+        session.pausedForLogin = true;
+        await chrome.storage.local.set({ p2p_shop_session: session });
+      }
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+
+  if (message.type === 'P2P_RESUME_SHOPPING') {
+    chrome.storage.local.get(['p2p_shop_session'], async (data) => {
+      const session = data.p2p_shop_session;
+      if (!session || !session.items || session.items.length === 0) {
+        sendResponse({ ok: false, error: 'No saved shopping session to resume.' });
+        return;
+      }
+      session.active = true;
+      session.pausedForLogin = false;
+      const pendingIdx = session.items.findIndex((i) => i.status === 'pending');
+      if (pendingIdx === -1) {
+        session.active = false;
+        await chrome.storage.local.set({ p2p_shop_session: session });
+        sendResponse({ ok: true, finished: true });
+        return;
+      }
+      session.currentIndex = pendingIdx;
+      await chrome.storage.local.set({ p2p_shop_session: session });
+      const item = session.items[pendingIdx];
+      const url = STORE_URLS[session.store](item.ukSearchQuery || item.name);
+      const targetTabId = message.payload?.tabId || sender.tab?.id;
+      if (targetTabId) {
+        await chrome.tabs.update(targetTabId, { url });
+      } else {
+        await chrome.tabs.create({ url });
+      }
+      sendResponse({ ok: true, remaining: session.items.filter((i) => i.status === 'pending').length });
+    });
+    return true;
+  }
+
   if (message.type === 'P2P_STOP_SHOPPING') {
     chrome.storage.local.get(['p2p_shop_session'], async (data) => {
       if (data.p2p_shop_session) {

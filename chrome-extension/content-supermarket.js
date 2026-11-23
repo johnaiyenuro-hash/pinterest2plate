@@ -13,6 +13,33 @@
   const CURRENT_STORE = detectStoreKey();
   if (!CURRENT_STORE) return;
 
+  function isOnLoginPage() {
+    const href = window.location.href.toLowerCase();
+    return (
+      /\/(login|signin|sign-in|account\/login|auth|sso|register)/.test(href) ||
+      Boolean(document.querySelector('input[type="password"]'))
+    );
+  }
+
+  function isOnSearchPage() {
+    const href = window.location.href.toLowerCase();
+    return (
+      href.includes('/search') ||
+      href.includes('searchresults') ||
+      href.includes('query=') ||
+      href.includes('entry=')
+    );
+  }
+
+  function hasSignInPromptModal() {
+    const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"], .modal'));
+    return dialogs.some((d) => {
+      if (!isVisible(d)) return false;
+      const t = (d.textContent || '').toLowerCase();
+      return (t.includes('sign in') || t.includes('log in')) && (t.includes('password') || t.includes('email') || t.includes('account'));
+    });
+  }
+
   function isVisible(el) {
     if (!el) return false;
     const style = window.getComputedStyle(el);
@@ -204,12 +231,31 @@
     const session = data.p2p_shop_session;
     if (!session || !session.active || session.store !== CURRENT_STORE) return;
 
+    const remainingCount = session.items.filter((i) => i.status === 'pending').length;
     const { statusEl, btnAddNext, advance } = renderAssistantPanel(session);
+
+    // Case 1: User is on a Login page — pause safely without losing any items!
+    if (isOnLoginPage()) {
+      chrome.runtime.sendMessage({ type: 'P2P_PAUSE_FOR_LOGIN' });
+      statusEl.textContent = `Sign in to ${CURRENT_STORE.toUpperCase()} first — all ${remainingCount} items are safely saved. Once signed in, click Resume below.`;
+      btnAddNext.textContent = `Resume (${remainingCount} left) →`;
+      btnAddNext.onclick = () => chrome.runtime.sendMessage({ type: 'P2P_RESUME_SHOPPING' });
+      return;
+    }
+
+    // Case 2: Supermarket redirected user back to homepage/account after signing in
+    if (session.pausedForLogin || !isOnSearchPage()) {
+      statusEl.textContent = `Welcome back! All ${remainingCount} items are saved and ready. Click Resume to pick up right where you left off.`;
+      btnAddNext.textContent = `Resume Filling Trolley (${remainingCount}) →`;
+      btnAddNext.onclick = () => chrome.runtime.sendMessage({ type: 'P2P_RESUME_SHOPPING' });
+      return;
+    }
+
     const addBtn = await waitForAddButton(7000);
 
     if (!addBtn) {
       statusEl.textContent =
-        'Could not auto-detect an Add button (you may need to sign in or pick a variant manually). Click "Next →" once added.';
+        'Could not auto-detect an Add button (check if you are signed in or pick a variant manually). Click "Next →" once added.';
       btnAddNext.textContent = 'Added Manually · Next →';
       btnAddNext.onclick = () => advance('added');
       return;
@@ -220,9 +266,22 @@
 
     const doClickAndAdvance = () => {
       btnAddNext.disabled = true;
+      const urlBeforeClick = window.location.href;
       statusEl.textContent = `Adding "${matchName || 'top match'}" to your trolley...`;
       addBtn.click();
-      setTimeout(() => advance('added'), 1500);
+
+      // Wait 1.6s and verify we weren't bounced to a Sign-In modal or Login URL before marking added!
+      setTimeout(() => {
+        if (isOnLoginPage() || hasSignInPromptModal() || (window.location.href !== urlBeforeClick && !isOnSearchPage())) {
+          chrome.runtime.sendMessage({ type: 'P2P_PAUSE_FOR_LOGIN' });
+          btnAddNext.disabled = false;
+          statusEl.textContent = `Sign in required — your ${remainingCount} items are saved! Finish signing in, then click Resume.`;
+          btnAddNext.textContent = `Resume (${remainingCount} left) →`;
+          btnAddNext.onclick = () => chrome.runtime.sendMessage({ type: 'P2P_RESUME_SHOPPING' });
+          return;
+        }
+        advance('added');
+      }, 1600);
     };
 
     btnAddNext.onclick = doClickAndAdvance;
