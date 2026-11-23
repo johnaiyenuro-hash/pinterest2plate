@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { consolidateBasket, formatScaledIngredientQty } from '../consolidate';
+import { FOOD_TABS } from '../foodTags';
 import { decryptToken, encryptToken } from '../pinterestOAuth';
 import { mapPinterestV5Pin, parseImportTarget } from '../pinterestResolver';
 import { SEED_RECIPES } from '../seedRecipes';
@@ -91,5 +92,17 @@ describe('pinterestOAuth session encryption', () => {
     const sealed = encryptToken(token);
     expect(sealed).not.toContain(token);
     expect(decryptToken(sealed)).toBe(token);
+  });
+});
+
+describe('FOOD_TABS ingredient categorization', () => {
+  it('accurately categorizes chicken, beef/goat, seafood, pasta, rice, and veggie recipes', () => {
+    const byId = (id: string) => FOOD_TABS.find((t) => t.id === id)!;
+    expect(SEED_RECIPES.filter(byId('chicken').matches).length).toBeGreaterThanOrEqual(3);
+    expect(SEED_RECIPES.filter(byId('beef').matches).some((r) => r.id === 'curry_goat')).toBe(true);
+    expect(SEED_RECIPES.filter(byId('seafood').matches).some((r) => r.id === 'crispy_salmon_bites')).toBe(true);
+    expect(SEED_RECIPES.filter(byId('pasta').matches).some((r) => r.id === 'marry_me_chicken_soup')).toBe(true);
+    expect(SEED_RECIPES.filter(byId('rice').matches).some((r) => r.id === 'jollof_chicken')).toBe(true);
+    expect(SEED_RECIPES.filter(byId('veggie').matches).some((r) => r.id === 'gochujang_tofu')).toBe(true);
   });
 });

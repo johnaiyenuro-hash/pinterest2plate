@@ -24,6 +24,9 @@ import { ImportModal, type DiscoverSummary, type ExtractionProgressItem } from '
 import { KitchenTimerBar, type ActiveTimer } from './KitchenTimerBar';
 import { ExtractingPinCard, RecipeCard } from './RecipeCard';
 import { RecipePlanModal } from './RecipePlanModal';
+import { consolidateBasket } from '@/lib/consolidate';
+import { FOOD_TABS } from '@/lib/foodTags';
+import { STORES } from '@/lib/stores';
 import { RECIPE_CATEGORIES, type Board, type RawPin, type Recipe, type SupermarketKey } from '@/lib/types';
 
 interface RuntimeStatus {
@@ -59,6 +62,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [activeFoodTab, setActiveFoodTab] = useState<string>('all');
   const [mediaFilter, setMediaFilter] = useState<'all' | 'video' | 'quick'>('all');
   const [cookedFilter, setCookedFilter] = useState<'all' | 'to_try' | 'made'>('all');
 
@@ -640,10 +644,20 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     return counts;
   }, [readyRecipes]);
 
+  const foodTabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const tab of FOOD_TABS) {
+      counts[tab.id] = readyRecipes.filter((r) => tab.matches(r)).length;
+    }
+    return counts;
+  }, [readyRecipes]);
+
   const filteredRecipes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const activeFoodDef = activeFoodTab === 'all' ? null : FOOD_TABS.find((t) => t.id === activeFoodTab) || null;
     return readyRecipes.filter((r) => {
       if (activeCategory !== 'all' && r.category !== activeCategory) return false;
+      if (activeFoodDef && !activeFoodDef.matches(r)) return false;
       if (mediaFilter === 'video' && r.sourceType !== 'video') return false;
       if (mediaFilter === 'quick' && r.prepMinutes + r.cookMinutes > 25) return false;
       if (cookedFilter === 'to_try' && madeItIds.has(r.id)) return false;
@@ -657,7 +671,17 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
         r.ingredients.some((i) => i.name.toLowerCase().includes(q))
       );
     });
-  }, [readyRecipes, activeCategory, mediaFilter, cookedFilter, madeItIds, searchQuery]);
+  }, [readyRecipes, activeCategory, activeFoodTab, mediaFilter, cookedFilter, madeItIds, searchQuery]);
+
+  const printBasket = useMemo(
+    () => consolidateBasket(recipes, selectedIds, servingsOverride),
+    [recipes, selectedIds, servingsOverride],
+  );
+
+  const selectedRecipesForPrint = useMemo(() => {
+    const idSet = new Set(selectedIds);
+    return recipes.filter((r) => idSet.has(r.id) && r.status === 'ready');
+  }, [recipes, selectedIds]);
 
   const activeBoardLabel = useMemo(() => {
     if (activeBoardId === 'all') return `All Boards (${boards.length})`;
@@ -674,19 +698,36 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     [progressItems],
   );
 
-  const handlePickThree = () => {
-    const untriedPool = (filteredRecipes.length >= 3 ? filteredRecipes : readyRecipes).filter(
-      (r) => !madeItIds.has(r.id),
-    );
-    const pool = untriedPool.length >= 3 ? untriedPool : filteredRecipes.length >= 3 ? filteredRecipes : readyRecipes;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
-    const nextIds = shuffled.map((r) => r.id);
+  const handlePickFive = () => {
+    const TARGET_COUNT = 5;
+    const basePool = filteredRecipes.length >= TARGET_COUNT ? filteredRecipes : readyRecipes;
+    const untriedPool = basePool.filter((r) => !madeItIds.has(r.id));
+    const pool = untriedPool.length >= TARGET_COUNT ? untriedPool : basePool;
+
+    // Shuffle and prefer category diversity across the 5 picks
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const picked: Recipe[] = [];
+    const seenCats = new Set<string>();
+
+    for (const r of shuffled) {
+      if (picked.length >= TARGET_COUNT) break;
+      if (!seenCats.has(r.category)) {
+        picked.push(r);
+        seenCats.add(r.category);
+      }
+    }
+    for (const r of shuffled) {
+      if (picked.length >= TARGET_COUNT) break;
+      if (!picked.some((p) => p.id === r.id)) picked.push(r);
+    }
+
+    const nextIds = picked.map((r) => r.id);
     setSelectedIds(nextIds);
     localStorage.setItem(LS_SELECTED, JSON.stringify(nextIds));
     notify(
-      untriedPool.length >= 3
-        ? 'Picked 3 untried dishes for your week'
-        : 'Picked 3 balanced meals for your week',
+      untriedPool.length >= TARGET_COUNT
+        ? `Picked ${nextIds.length} untried dishes for your week`
+        : `Picked ${nextIds.length} balanced meals for your week`,
     );
   };
 
@@ -842,11 +883,11 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={handlePickThree}
+                onClick={handlePickFive}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#332E2A] active:scale-[0.98]"
               >
                 <Dices className="h-4 w-4 text-[#F97316]" />
-                {toTryCount >= 3 ? 'Pick 3 Untried' : 'Pick 3 for Me'}
+                {toTryCount >= 5 ? 'Pick 5 Untried' : 'Pick 5 for Me'}
               </button>
               {selectedIds.length > 0 && (
                 <button
@@ -947,7 +988,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                     : 'bg-[#FAF7F2] text-[#575049] hover:bg-[#EFE8DF]'
                 }`}
               >
-                All <span className="opacity-70 tabular-nums">({categoryCounts.all || 0})</span>
+                All Styles <span className="opacity-70 tabular-nums">({categoryCounts.all || 0})</span>
               </button>
               {RECIPE_CATEGORIES.map((cat) => {
                 const count = categoryCounts[cat] || 0;
@@ -964,6 +1005,39 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                     }`}
                   >
                     {cat} <span className="opacity-70 tabular-nums">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Main Ingredient & Dish Type Tabs (Chicken, Beef, Seafood, Pasta, Rice, Veggie, Eggs) */}
+            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto border-t border-[#F4EFE7] pt-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveFoodTab('all')}
+                className={`whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold transition-colors ${
+                  activeFoodTab === 'all'
+                    ? 'border-[#D93B22] bg-[#D93B22]/10 text-[#D93B22]'
+                    : 'border-[#EFE8DF] bg-white text-[#6B645C] hover:border-[#D4C7B7]'
+                }`}
+              >
+                All Ingredients
+              </button>
+              {FOOD_TABS.map((tab) => {
+                const count = foodTabCounts[tab.id] || 0;
+                if (count === 0 && activeFoodTab !== tab.id) return null;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveFoodTab((prev) => (prev === tab.id ? 'all' : tab.id))}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                      activeFoodTab === tab.id
+                        ? 'border-[#D93B22] bg-[#D93B22] text-white font-bold'
+                        : 'border-[#EFE8DF] bg-white text-[#575049] hover:border-[#D4C7B7]'
+                    }`}
+                  >
+                    {tab.label} <span className="opacity-75 tabular-nums">({count})</span>
                   </button>
                 );
               })}
@@ -1016,6 +1090,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
                   onClick={() => {
                     setSearchQuery('');
                     setActiveCategory('all');
+                    setActiveFoodTab('all');
                     setMediaFilter('all');
                     setCookedFilter('all');
                   }}
@@ -1060,7 +1135,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
         </section>
 
         {/* RIGHT COLUMN: Sticky Consolidated Basket (4 cols) */}
-        <aside className="hidden lg:block lg:col-span-4 lg:sticky lg:top-20">
+        <aside className="no-print hidden lg:block lg:col-span-4 lg:sticky lg:top-20">
           <BasketPanel
             recipes={recipes}
             selectedIds={selectedIds}
@@ -1082,7 +1157,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       {/* Mobile Basket Slide-Up Sheet */}
       {mobileBasketOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end bg-[#1C1917]/60 backdrop-blur-sm lg:hidden"
+          className="no-print fixed inset-0 z-50 flex items-end bg-[#1C1917]/60 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileBasketOpen(false)}
         >
           <div
@@ -1221,6 +1296,66 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
       {/* Floating Active Kitchen Timers */}
       <KitchenTimerBar timers={timers} onUpdateTimers={setTimers} />
+
+      {/* Dedicated Ink-Friendly A4 Print Sheet (always prints cleanly regardless of viewport width) */}
+      <section className="print-only p-2 text-[#111111]">
+        <div className="border-b-2 border-[#111111] pb-3 mb-5 flex items-baseline justify-between">
+          <div>
+            <h1 className="font-serif text-2xl font-bold">P!nterest2Plate — Weekly Shopping List</h1>
+            <p className="text-xs text-[#555555] mt-1">
+              Store: <strong>{(STORES[currentStore] || STORES.tesco).name}</strong> ·{' '}
+              {selectedRecipesForPrint.length} meal{selectedRecipesForPrint.length === 1 ? '' : 's'} ·{' '}
+              {hidePantry ? 'Pantry staples hidden' : 'Including pantry staples'}
+            </p>
+          </div>
+          <span className="text-xs text-[#555555]">
+            {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
+        </div>
+
+        {selectedRecipesForPrint.length > 0 && (
+          <div className="mb-5 rounded-xl border border-[#cccccc] p-3">
+            <h2 className="text-xs font-bold uppercase tracking-wider mb-1.5">This Week&apos;s Meals</h2>
+            <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+              {selectedRecipesForPrint.map((r) => (
+                <li key={r.id}>
+                  • <strong>{r.title}</strong> ({servingsOverride[r.id] ?? r.servings} servings)
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-6">
+          {Object.entries(printBasket.aisles).map(([aisle, items]) => {
+            const visible = items.filter((item) => {
+              if (checkedKeys.has(item.key)) return false;
+              if (hidePantry && item.isPantry) return false;
+              return true;
+            });
+            if (visible.length === 0) return null;
+            return (
+              <div key={aisle} className="break-inside-avoid mb-4">
+                <h3 className="border-b border-[#999999] pb-1 mb-2 text-xs font-bold uppercase tracking-wider">
+                  {aisle} ({visible.length})
+                </h3>
+                <ul className="space-y-1.5 text-xs">
+                  {visible.map((item) => (
+                    <li key={item.key} className="flex items-start gap-2">
+                      <span className="inline-block mt-0.5 h-3.5 w-3.5 shrink-0 border border-[#333333] rounded-[2px]" />
+                      <div>
+                        <span className="font-semibold">{item.name}</span>{' '}
+                        <span className="font-bold">({item.combinedQty})</span>
+                        <div className="text-[10px] text-[#666666]">{item.fromRecipes.join(', ')}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Toast Notification */}
       {toast && (
