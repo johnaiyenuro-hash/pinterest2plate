@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P!nterest2Plate Companion</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <div class="logo">P2P</div>
+      <div>
+        <h1>P!nterest<span>2</span>Plate</h1>
+        <p class="subtitle">Companion Extension</p>
+      </div>
+    </div>
+    <button id="btn-open-app" class="btn-ghost" title="Open P!nterest2Plate">Open App ↗</button>
+  </header>
+
+  <main class="main">
+    <!-- Section 1: Pinterest Board Auto-Scroller -->
+    <section class="card" id="sec-pinterest">
+      <div class="card-head">
+        <span class="badge badge-red">Pinterest Collector</span>
+        <span id="pinterest-page-status" class="muted">Checking tab...</span>
+      </div>
+      <h2>Grab Diverse Pins from Board</h2>
+      <p class="desc">
+        Auto-scrolls your logged-in Pinterest board (all 600+ pins), collects a diverse shuffled batch, and sends them straight to P!nterest2Plate.
+      </p>
+
+      <div class="row">
+        <label class="field-label" for="scroll-steps">Scroll depth:</label>
+        <select id="scroll-steps" class="select">
+          <option value="3">Quick (~40 pins scanned)</option>
+          <option value="8" selected>Medium (~120 pins scanned)</option>
+          <option value="18">Deep (~300+ pins scanned)</option>
+          <option value="35">Full Board (~600+ pins)</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="field-label" for="sample-count">Send diverse mix:</label>
+        <select id="sample-count" class="select">
+          <option value="6">6 pins</option>
+          <option value="12" selected>12 pins</option>
+          <option value="20">20 pins</option>
+          <option value="30">30 pins</option>
+        </select>
+      </div>
+
+      <div class="btn-row">
+        <button id="btn-collect-board" class="btn-primary">Auto-Scroll &amp; Grab Pins</button>
+        <button id="btn-cancel-collect" class="btn-danger hidden">Stop</button>
+      </div>
+      <div id="collect-status" class="status hidden"></div>
+    </section>
+
+    <!-- Section 2: UK Supermarket Auto-Trolley -->
+    <section class="card" id="sec-shop">
+      <div class="card-head">
+        <span class="badge badge-green">Single-Basket Trolley</span>
+        <span id="basket-summary" class="muted">No basket synced yet</span>
+      </div>
+      <h2>Auto-Fill UK Supermarket Trolley</h2>
+      <p class="desc">
+        Steps through your consolidated P!nterest2Plate basket inside one supermarket tab and clicks Add to Trolley automatically.
+      </p>
+
+      <div class="row">
+        <label class="field-label" for="shop-store">Supermarket:</label>
+        <select id="shop-store" class="select">
+          <option value="tesco">Tesco</option>
+          <option value="sainsburys">Sainsbury's</option>
+          <option value="ocado">Ocado</option>
+          <option value="asda">Asda</option>
+        </select>
+      </div>
+
+      <label class="check-row">
+        <input type="checkbox" id="chk-auto-add" checked />
+        <span>Auto-click &ldquo;Add&rdquo; for top match (you can pause/skip anytime)</span>
+      </label>
+
+      <button id="btn-start-shop" class="btn-dark" disabled>Start Filling Trolley</button>
+      <div id="shop-status" class="status hidden"></div>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

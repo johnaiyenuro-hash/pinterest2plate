@@ -74,6 +74,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
   const [progressItems, setProgressItems] = useState<ExtractionProgressItem[]>([]);
   const [discoverSummary, setDiscoverSummary] = useState<DiscoverSummary | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [extensionReady, setExtensionReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>({
@@ -492,6 +493,75 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     },
     [notify, recipes, runBatchExtraction],
   );
+
+  // Listen for Chrome Extension presence & incoming auto-scrolled Pinterest pin batches
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window || !event.data || !event.data.type) return;
+
+      if (event.data.type === 'P2P_EXTENSION_READY') {
+        setExtensionReady(true);
+        return;
+      }
+
+      if (event.data.type === 'P2P_EXTENSION_IMPORT_PINS') {
+        const payload = event.data.payload as {
+          pins?: Array<{
+            pinId: string;
+            pinUrl: string;
+            imageUrl: string;
+            title: string;
+            description: string;
+            mediaType?: 'video' | 'image';
+            videoUrl?: string;
+          }>;
+          boardName?: string;
+        };
+        const incoming = payload?.pins || [];
+        if (incoming.length === 0) return;
+
+        const boardName = payload.boardName || 'Pinterest Extension Import';
+        const boardId = `ext_${boardName.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 32)}`;
+        const board: Board = {
+          id: boardId,
+          name: boardName,
+          handle: `${incoming.length} diverse pins (Extension)`,
+          url: incoming[0].pinUrl,
+          source: 'public',
+          pinCount: incoming.length,
+          lastSyncedAt: new Date().toISOString(),
+        };
+
+        const existingIds = new Set(recipes.map((r) => r.id));
+        const pendingPins: RawPin[] = [];
+        for (const p of incoming) {
+          const canonicalId = p.pinId.startsWith('pin_') ? p.pinId : `pin_${p.pinId}`;
+          if (existingIds.has(canonicalId)) continue;
+          pendingPins.push({
+            pinId: p.pinId,
+            boardId,
+            title: p.title || 'Pinterest Recipe Pin',
+            description: p.description || '',
+            pinUrl: p.pinUrl,
+            mediaType: p.videoUrl || p.mediaType === 'video' ? 'video' : 'image',
+            imageUrl: p.imageUrl || '',
+            videoUrl: p.videoUrl,
+            creator: 'Pinterest Saved',
+          });
+        }
+
+        setImportOpen(true);
+        notify(`Received ${incoming.length} pins from Chrome Extension — extracting ${pendingPins.length} new...`);
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        runBatchExtraction(board, [], pendingPins, false, controller);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    window.postMessage({ type: 'P2P_WEBAPP_PING' }, '*');
+    return () => window.removeEventListener('message', onMessage);
+  }, [notify, recipes, runBatchExtraction]);
 
   const handleForceExtractSkipped = useCallback(
     async (skippedRecipe: Recipe) => {
@@ -998,6 +1068,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
             currentStore={currentStore}
             hidePantry={hidePantry}
             checkedKeys={checkedKeys}
+            extensionReady={extensionReady}
             onSelectStore={handleSelectStore}
             onToggleHidePantry={setHidePantry}
             onToggleItemChecked={handleToggleItemChecked}
@@ -1037,6 +1108,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
               currentStore={currentStore}
               hidePantry={hidePantry}
               checkedKeys={checkedKeys}
+              extensionReady={extensionReady}
               onSelectStore={handleSelectStore}
               onToggleHidePantry={setHidePantry}
               onToggleItemChecked={handleToggleItemChecked}
@@ -1132,6 +1204,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
         open={importOpen}
         initialUrl={importInitialUrl}
         status={runtimeStatus}
+        extensionReady={extensionReady}
         progressItems={progressItems}
         discoverSummary={discoverSummary}
         isRunning={extracting}

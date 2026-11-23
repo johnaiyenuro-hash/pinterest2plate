@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Copy,
@@ -23,6 +23,7 @@ interface BasketPanelProps {
   currentStore: SupermarketKey;
   hidePantry: boolean;
   checkedKeys: Set<string>;
+  extensionReady: boolean;
   onSelectStore: (store: SupermarketKey) => void;
   onToggleHidePantry: (hide: boolean) => void;
   onToggleItemChecked: (key: string) => void;
@@ -38,6 +39,7 @@ export function BasketPanel({
   currentStore,
   hidePantry,
   checkedKeys,
+  extensionReady,
   onSelectStore,
   onToggleHidePantry,
   onToggleItemChecked,
@@ -79,6 +81,41 @@ export function BasketPanel({
     () => flatVisibleItems.filter((item) => !checkedKeys.has(item.key)).length,
     [flatVisibleItems, checkedKeys],
   );
+
+  // Keep the P!nterest2Plate Chrome Extension synced with the live consolidated basket
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.postMessage(
+      {
+        type: 'P2P_WEBAPP_SYNC_BASKET',
+        payload: {
+          store: currentStore,
+          mealsCount: selectedRecipes.length,
+          meals: selectedRecipes.map((r) => r.title),
+          items: flatVisibleItems.map((item) => ({
+            key: item.key,
+            name: item.name,
+            ukSearchQuery: item.ukSearchQuery,
+            combinedQty: item.combinedQty,
+            aisle: item.aisle,
+            checked: checkedKeys.has(item.key),
+          })),
+        },
+      },
+      '*',
+    );
+  }, [currentStore, selectedRecipes, flatVisibleItems, checkedKeys, extensionReady]);
+
+  const handleStartExtensionAutoFill = () => {
+    window.postMessage(
+      {
+        type: 'P2P_WEBAPP_START_SHOPPING',
+        payload: { store: currentStore, autoAdd: true },
+      },
+      '*',
+    );
+    onNotify(`Opening ${storeConfig.name} with Trolley Assistant...`);
+  };
 
   const handleCopyWhatsApp = async () => {
     if (selectedRecipes.length === 0) return;
@@ -364,7 +401,9 @@ export function BasketPanel({
         store={storeConfig}
         items={flatVisibleItems}
         checkedKeys={checkedKeys}
+        extensionReady={extensionReady}
         onToggleChecked={onToggleItemChecked}
+        onStartExtensionAutoFill={handleStartExtensionAutoFill}
         onClose={() => setShopAllOpen(false)}
         onNotify={onNotify}
       />

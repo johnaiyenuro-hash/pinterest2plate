@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "P!nterest2Plate Companion",
+  "version": "1.0.0",
+  "description": "Auto-scroll 600+ pin Pinterest boards for diverse recipe imports and auto-fill your UK supermarket trolley (Tesco, Sainsbury's, Ocado, Asda).",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.pinterest.com/*",
+    "https://pinterest-to-plate.vercel.app/*",
+    "http://localhost:3000/*",
+    "https://www.tesco.com/*",
+    "https://www.sainsburys.co.uk/*",
+    "https://www.ocado.com/*",
+    "https://groceries.asda.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "P!nterest2Plate Companion",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pinterest-to-plate.vercel.app/*",
+        "http://localhost:3000/*"
+      ],
+      "js": ["content-webapp.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.pinterest.com/*"
+      ],
+      "js": ["content-pinterest.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.tesco.com/*",
+        "https://www.sainsburys.co.uk/*",
+        "https://www.ocado.com/*",
+        "https://groceries.asda.com/*"
+      ],
+      "js": ["content-supermarket.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

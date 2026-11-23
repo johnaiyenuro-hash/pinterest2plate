@@ -20,7 +20,9 @@ interface ShopAllModalProps {
   store: StoreConfig;
   items: ConsolidatedItem[];
   checkedKeys: Set<string>;
+  extensionReady: boolean;
   onToggleChecked: (key: string) => void;
+  onStartExtensionAutoFill: () => void;
   onClose: () => void;
   onNotify: (msg: string) => void;
 }
@@ -30,7 +32,9 @@ export function ShopAllModal({
   store,
   items,
   checkedKeys,
+  extensionReady,
   onToggleChecked,
+  onStartExtensionAutoFill,
   onClose,
   onNotify,
 }: ShopAllModalProps) {
@@ -146,6 +150,36 @@ export function ShopAllModal({
 
         {/* Body */}
         <div className="thin-scroll flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Chrome Extension 1-Click Auto-Fill Banner */}
+          {remainingItems.length > 0 && ['tesco', 'sainsburys', 'ocado', 'asda'].includes(store.key) && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#2D6A4F]/25 bg-[#F5F8F4] p-3.5 text-xs">
+              <div className="min-w-0">
+                <p className="font-bold text-[#1C1917]">
+                  {extensionReady
+                    ? `1-Click Auto-Fill Ready (${store.name})`
+                    : 'Want automatic 1-click trolley filling?'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-[#575049]">
+                  {extensionReady
+                    ? `Companion Extension detected — automatically clicks Add for all ${remainingItems.length} items inside ${store.name}.`
+                    : 'Load the included chrome-extension folder in chrome://extensions to auto-click Add inside Tesco, Sainsbury’s, Ocado, or Asda.'}
+                </p>
+              </div>
+              {extensionReady && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onStartExtensionAutoFill();
+                    onClose();
+                  }}
+                  className="shrink-0 rounded-xl bg-[#2D6A4F] px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#23543E]"
+                >
+                  Auto-Fill Trolley
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Progress */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-semibold">

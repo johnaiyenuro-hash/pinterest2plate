@@ -46,6 +46,7 @@ interface ImportModalProps {
   open: boolean;
   initialUrl?: string;
   status: RuntimeStatus;
+  extensionReady: boolean;
   progressItems: ExtractionProgressItem[];
   discoverSummary: DiscoverSummary | null;
   isRunning: boolean;
@@ -60,6 +61,7 @@ export function ImportModal({
   open,
   initialUrl,
   status,
+  extensionReady,
   progressItems,
   discoverSummary,
   isRunning,
@@ -104,11 +106,6 @@ export function ImportModal({
   const doneCount = progressItems.filter(
     (p) => p.state === 'ready' || p.state === 'skipped',
   ).length;
-
-  // Smart Board & Pin Clipper Bookmarklet:
-  // If clicked while scrolled down a 600-pin Pinterest board, grabs up to 30 shuffled visible pin links!
-  // Otherwise clips the single current pin or recipe blog URL.
-  const bookmarkletHref = `javascript:(function(){var links=Array.from(document.querySelectorAll('a[href*="/pin/"]')).map(function(a){return a.href.split('?')[0];}).filter(function(u,i,arr){return /\\/pin\\/[^\\/]+/.test(u)&&arr.indexOf(u)===i;});if(links.length>2&&!/\\/pin\\//.test(location.pathname)){links.sort(function(){return Math.random()-0.5;});var batch=links.slice(0,25).join('\\n');window.open('${bookmarkletOrigin}/?importBatch='+encodeURIComponent(batch),'_blank');}else{window.open('${bookmarkletOrigin}/?import='+encodeURIComponent(location.href),'_blank');}})();`;
 
   return (
     <div
@@ -302,24 +299,26 @@ export function ImportModal({
                 </div>
               )}
 
-              {/* Upgraded Scrolled Board & Pin Clipper Bookmarklet */}
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#EFE8DF] bg-[#FAF7F2] px-4 py-3">
+              {/* Chrome Extension Auto-Scroller Card (Replaces CSP-blocked Bookmarklet) */}
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-[#EFE8DF] bg-[#FAF7F2] px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-[#1C1917]">
-                    Scrolled Board &amp; Pin Clipper (All 600+ Pins)
-                  </p>
-                  <p className="text-[11px] text-[#6B645C] leading-snug mt-0.5">
-                    Drag to your bookmarks bar. Scroll anywhere down your Pinterest board and click it to grab a random mix of up to 25 pins from where you scrolled!
+                  <div className="flex items-center gap-2">
+                    <Bookmark className="h-3.5 w-3.5 text-[#D93B22] shrink-0" />
+                    <p className="text-xs font-bold text-[#1C1917]">
+                      Chrome Extension Auto-Scroller (All 600+ Pins)
+                    </p>
+                    {extensionReady && (
+                      <span className="rounded-full bg-[#2D6A4F] px-2 py-0.5 text-[10px] font-bold text-white">
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#6B645C] leading-snug mt-1">
+                    {extensionReady
+                      ? 'Open your Pinterest board in Chrome and click the P!nterest2Plate extension icon to auto-scroll all 600+ pins and send a diverse mix right here.'
+                      : 'Pinterest blocks browser bookmarklets via CSP. Load the included chrome-extension folder in chrome://extensions (Developer Mode → Load unpacked) to auto-scroll 600+ pin boards and auto-fill UK supermarket trolleys.'}
                   </p>
                 </div>
-                <a
-                  href={bookmarkletHref}
-                  onClick={(e) => e.preventDefault()}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[#D4C7B7] bg-white px-3 py-1.5 text-xs font-bold text-[#1C1917] shadow-sm cursor-grab active:cursor-grabbing"
-                >
-                  <Bookmark className="h-3.5 w-3.5 text-[#D93B22]" />
-                  Clip to Plate
-                </a>
               </div>
 
               {/* How Multimodal Extraction Works */}
@@ -359,8 +358,12 @@ export function ImportModal({
                     Sample Across All 600+ Pins with Pinterest OAuth
                   </h3>
                   <p className="text-xs text-[#6B645C] leading-relaxed">
-                    Add <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_ID</code> and{' '}
-                    <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_SECRET</code> in Vercel to paginate through up to 750 pins per board (including private boards &amp; 720p MP4 videos) and randomly sample a diverse set each time.
+                    Create a Pinterest App at <span className="font-semibold">developers.pinterest.com</span> with Redirect URI{' '}
+                    <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">
+                      {bookmarkletOrigin}/api/pinterest/callback
+                    </code>
+                    , then add <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_ID</code> and{' '}
+                    <code className="rounded bg-white px-1 py-0.5 font-mono">PINTEREST_APP_SECRET</code> in Vercel to paginate through all 750 pins per board (including private boards &amp; 720p MP4 videos).
                   </p>
                 </div>
               ) : !status.pinterestConnected ? (
