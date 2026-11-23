@@ -1,11 +1,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_BOARDS, SEED_RECIPES } from './seedRecipes';
-import { BoardSchema, RecipeSchema, type Board, type Recipe } from './types';
+import { BoardSchema, RecipeSchema, type Board, type Recipe, type SupermarketKey } from './types';
+
+export interface PlannerUserState {
+  selectedIds: string[];
+  servingsOverride: Record<string, number>;
+  madeItIds: string[];
+  checkedKeys: string[];
+  currentStore: SupermarketKey;
+  hidePantry: boolean;
+  updatedAt: string;
+}
+
+export const DEFAULT_USER_STATE: PlannerUserState = {
+  selectedIds: ['sliders', 'crispy_salmon_bites', 'fondant_leeks'],
+  servingsOverride: {},
+  madeItIds: [],
+  checkedKeys: [],
+  currentStore: 'tesco',
+  hidePantry: false,
+  updatedAt: '2026-11-23T00:00:00.000Z',
+};
 
 interface LocalDbShape {
   boards: Board[];
   recipes: Recipe[];
+  state?: PlannerUserState;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -15,8 +36,18 @@ let memoryFallback: LocalDbShape | null = null;
 let pgPoolPromise: Promise<import('pg').Pool | null> | null = null;
 let pgMigrated = false;
 
+export function getDatabaseUrl(): string | undefined {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    undefined
+  );
+}
+
 async function getPgPool(): Promise<import('pg').Pool | null> {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getDatabaseUrl();
   if (!connectionString) return null;
 
   if (!pgPoolPromise) {
@@ -58,6 +89,11 @@ async function ensurePgSchema(pool: import('pg').Pool): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_p2p_recipes_board ON p2p_recipes(board_id);
+    CREATE TABLE IF NOT EXISTS p2p_state (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   const existing = await pool.query('SELECT COUNT(*)::int AS count FROM p2p_recipes');
@@ -85,7 +121,8 @@ function readLocalDb(): LocalDbShape {
       const parsed = JSON.parse(fs.readFileSync(LOCAL_DB_PATH, 'utf-8')) as Partial<LocalDbShape>;
       const boards = (parsed.boards || DEFAULT_BOARDS).map((b) => BoardSchema.parse(b));
       const recipes = (parsed.recipes || SEED_RECIPES).map((r) => RecipeSchema.parse(r));
-      memoryFallback = { boards, recipes };
+      const state = parsed.state ? { ...DEFAULT_USER_STATE, ...parsed.state } : { ...DEFAULT_USER_STATE };
+      memoryFallback = { boards, recipes, state };
       return memoryFallback;
     }
   } catch (err) {
@@ -95,6 +132,7 @@ function readLocalDb(): LocalDbShape {
   memoryFallback = {
     boards: DEFAULT_BOARDS.map((b) => ({ ...b })),
     recipes: SEED_RECIPES.map((r) => ({ ...r })),
+    state: { ...DEFAULT_USER_STATE },
   };
   writeLocalDb(memoryFallback);
   return memoryFallback;
@@ -108,7 +146,7 @@ function writeLocalDb(db: LocalDbShape): void {
     }
     fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
   } catch {
-    // Read-only filesystem (e.g. Vercel without DATABASE_URL): keep in memory gracefully
+    // Read-only filesystem (e.g. Vercel without Postgres): keep in memory gracefully
   }
 }
 
@@ -144,9 +182,10 @@ export async function upsertBoard(board: Board): Promise<Board> {
 export async function getAllRecipes(boardId?: string): Promise<Recipe[]> {
   const pool = await getPgPool();
   if (pool) {
-    const res = boardId && boardId !== 'all'
-      ? await pool.query('SELECT data FROM p2p_recipes WHERE board_id = $1 ORDER BY updated_at DESC', [boardId])
-      : await pool.query('SELECT data FROM p2p_recipes ORDER BY updated_at DESC');
+    const res =
+      boardId && boardId !== 'all'
+        ? await pool.query('SELECT data FROM p2p_recipes WHERE board_id = $1 ORDER BY updated_at DESC', [boardId])
+        : await pool.query('SELECT data FROM p2p_recipes ORDER BY updated_at DESC');
     return res.rows.map((row) => RecipeSchema.parse(row.data));
   }
 
@@ -203,6 +242,42 @@ export async function deleteRecipe(id: string): Promise<boolean> {
   return false;
 }
 
+export async function getUserState(): Promise<PlannerUserState> {
+  const pool = await getPgPool();
+  if (pool) {
+    const res = await pool.query("SELECT data FROM p2p_state WHERE id = 'default' LIMIT 1");
+    if (res.rows[0]?.data) {
+      return { ...DEFAULT_USER_STATE, ...res.rows[0].data };
+    }
+    return { ...DEFAULT_USER_STATE };
+  }
+  return { ...DEFAULT_USER_STATE, ...(readLocalDb().state || {}) };
+}
+
+export async function saveUserState(partial: Partial<PlannerUserState>): Promise<PlannerUserState> {
+  const current = await getUserState();
+  const merged: PlannerUserState = {
+    ...current,
+    ...partial,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const pool = await getPgPool();
+  if (pool) {
+    await pool.query(
+      `INSERT INTO p2p_state (id, data, updated_at) VALUES ('default', $1, NOW())
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      [JSON.stringify(merged)],
+    );
+    return merged;
+  }
+
+  const db = readLocalDb();
+  db.state = merged;
+  writeLocalDb(db);
+  return merged;
+}
+
 export function getStorageMode(): 'postgres' | 'local-json' {
-  return process.env.DATABASE_URL ? 'postgres' : 'local-json';
+  return getDatabaseUrl() ? 'postgres' : 'local-json';
 }

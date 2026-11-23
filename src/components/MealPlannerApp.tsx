@@ -26,6 +26,7 @@ import { ExtractingPinCard, RecipeCard } from './RecipeCard';
 import { RecipePlanModal } from './RecipePlanModal';
 import { consolidateBasket } from '@/lib/consolidate';
 import { FOOD_TABS } from '@/lib/foodTags';
+import type { PlannerUserState } from '@/lib/storage';
 import { STORES } from '@/lib/stores';
 import { RECIPE_CATEGORIES, type Board, type RawPin, type Recipe, type SupermarketKey } from '@/lib/types';
 
@@ -39,6 +40,8 @@ interface RuntimeStatus {
 interface MealPlannerAppProps {
   initialBoards: Board[];
   initialRecipes: Recipe[];
+  initialUserState: PlannerUserState;
+  initialStorageMode: 'postgres' | 'local-json';
 }
 
 const LS_SELECTED = 'p2p_v2_selected';
@@ -48,16 +51,28 @@ const LS_LOCAL_RECIPES = 'p2p_v2_imported_recipes';
 const LS_LOCAL_BOARDS = 'p2p_v2_imported_boards';
 const LS_MADE_IT = 'p2p_v2_made_it';
 
-export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerAppProps) {
+export function MealPlannerApp({
+  initialBoards,
+  initialRecipes,
+  initialUserState,
+  initialStorageMode,
+}: MealPlannerAppProps) {
   const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [recipes, setRecipes] = useState<Recipe[]>(initialRecipes);
   const [activeBoardId, setActiveBoardId] = useState<string>('all');
-  const [selectedIds, setSelectedIds] = useState<string[]>(['sliders', 'crispy_salmon_bites', 'fondant_leeks']);
-  const [servingsOverride, setServingsOverride] = useState<Record<string, number>>({});
-  const [currentStore, setCurrentStore] = useState<SupermarketKey>('tesco');
-  const [hidePantry, setHidePantry] = useState(false);
-  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
-  const [madeItIds, setMadeItIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialUserState.selectedIds);
+  const [servingsOverride, setServingsOverride] = useState<Record<string, number>>(
+    initialUserState.servingsOverride || {},
+  );
+  const [currentStore, setCurrentStore] = useState<SupermarketKey>(initialUserState.currentStore || 'tesco');
+  const [hidePantry, setHidePantry] = useState(Boolean(initialUserState.hidePantry));
+  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(
+    () => new Set(initialUserState.checkedKeys || []),
+  );
+  const [madeItIds, setMadeItIds] = useState<Set<string>>(
+    () => new Set(initialUserState.madeItIds || []),
+  );
+  const stateHydratedRef = useRef(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,7 +100,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     geminiConfigured: true,
     pinterestOAuthConfigured: false,
     pinterestConnected: false,
-    storageMode: 'local-json',
+    storageMode: initialStorageMode,
   });
 
   // Active timers & toast
@@ -99,44 +114,84 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     }, 3400);
   }, []);
 
-  // Hydrate persisted client preferences + any client-cached imported recipes
+  // Hydrate persisted client preferences + migrate any local-only recipes when Postgres connects
   useEffect(() => {
     try {
-      const savedSelected = JSON.parse(localStorage.getItem(LS_SELECTED) || 'null');
-      if (Array.isArray(savedSelected)) setSelectedIds(savedSelected);
+      const isCloud = initialStorageMode === 'postgres';
 
-      const savedChecked = JSON.parse(localStorage.getItem(LS_PANTRY_CHECKED) || 'null');
-      if (Array.isArray(savedChecked)) setCheckedKeys(new Set(savedChecked));
+      if (!isCloud) {
+        const savedSelected = JSON.parse(localStorage.getItem(LS_SELECTED) || 'null');
+        if (Array.isArray(savedSelected)) setSelectedIds(savedSelected);
 
-      const savedMadeIt = JSON.parse(localStorage.getItem(LS_MADE_IT) || 'null');
-      if (Array.isArray(savedMadeIt)) setMadeItIds(new Set(savedMadeIt));
+        const savedChecked = JSON.parse(localStorage.getItem(LS_PANTRY_CHECKED) || 'null');
+        if (Array.isArray(savedChecked)) setCheckedKeys(new Set(savedChecked));
 
-      const savedStore = localStorage.getItem(LS_STORE) as SupermarketKey | null;
-      if (savedStore) setCurrentStore(savedStore);
+        const savedMadeIt = JSON.parse(localStorage.getItem(LS_MADE_IT) || 'null');
+        if (Array.isArray(savedMadeIt)) setMadeItIds(new Set(savedMadeIt));
 
-      const cachedLocalRecipes = JSON.parse(localStorage.getItem(LS_LOCAL_RECIPES) || '[]') as Recipe[];
-      if (Array.isArray(cachedLocalRecipes) && cachedLocalRecipes.length > 0) {
-        setRecipes((prev) => {
-          const map = new Map(prev.map((r) => [r.id, r]));
-          for (const r of cachedLocalRecipes) {
-            if (!map.has(r.id)) map.set(r.id, r);
-          }
-          return Array.from(map.values());
-        });
+        const savedStore = localStorage.getItem(LS_STORE) as SupermarketKey | null;
+        if (savedStore) setCurrentStore(savedStore);
       }
 
+      const cachedLocalRecipes = JSON.parse(localStorage.getItem(LS_LOCAL_RECIPES) || '[]') as Recipe[];
       const cachedLocalBoards = JSON.parse(localStorage.getItem(LS_LOCAL_BOARDS) || '[]') as Board[];
-      if (Array.isArray(cachedLocalBoards) && cachedLocalBoards.length > 0) {
-        setBoards((prev) => {
-          const map = new Map(prev.map((b) => [b.id, b]));
-          for (const b of cachedLocalBoards) {
-            if (!map.has(b.id)) map.set(b.id, b);
-          }
-          return Array.from(map.values());
-        });
+
+      if (isCloud) {
+        // Auto-upload any pins imported locally before Postgres was connected so nothing is lost!
+        const serverIds = new Set(initialRecipes.map((r) => r.id));
+        const unuploadedRecipes = cachedLocalRecipes.filter((r) => !serverIds.has(r.id));
+        const serverBoardIds = new Set(initialBoards.map((b) => b.id));
+        const unuploadedBoards = cachedLocalBoards.filter((b) => !serverBoardIds.has(b.id));
+
+        if (unuploadedRecipes.length > 0 || unuploadedBoards.length > 0) {
+          fetch('/api/state', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              syncBoards: unuploadedBoards,
+              syncRecipes: unuploadedRecipes,
+            }),
+          })
+            .then(() => {
+              setRecipes((prev) => {
+                const map = new Map(prev.map((r) => [r.id, r]));
+                for (const r of unuploadedRecipes) map.set(r.id, r);
+                return Array.from(map.values());
+              });
+              setBoards((prev) => {
+                const map = new Map(prev.map((b) => [b.id, b]));
+                for (const b of unuploadedBoards) map.set(b.id, b);
+                return Array.from(map.values());
+              });
+              notify(`Synced ${unuploadedRecipes.length} local recipes to Cloud DB!`);
+            })
+            .catch(() => {});
+        }
+      } else {
+        if (Array.isArray(cachedLocalRecipes) && cachedLocalRecipes.length > 0) {
+          setRecipes((prev) => {
+            const map = new Map(prev.map((r) => [r.id, r]));
+            for (const r of cachedLocalRecipes) {
+              if (!map.has(r.id)) map.set(r.id, r);
+            }
+            return Array.from(map.values());
+          });
+        }
+
+        if (Array.isArray(cachedLocalBoards) && cachedLocalBoards.length > 0) {
+          setBoards((prev) => {
+            const map = new Map(prev.map((b) => [b.id, b]));
+            for (const b of cachedLocalBoards) {
+              if (!map.has(b.id)) map.set(b.id, b);
+            }
+            return Array.from(map.values());
+          });
+        }
       }
     } catch {
       // ignore storage errors
+    } finally {
+      stateHydratedRef.current = true;
     }
 
     fetch('/api/status')
@@ -169,7 +224,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       notify(`Pinterest auth notice: ${params.get('reason') || 'cancelled'}`);
       window.history.replaceState({}, '', '/');
     }
-  }, [notify]);
+  }, [initialBoards, initialRecipes, initialStorageMode, notify]);
 
   const persistLocalCache = useCallback((nextRecipes: Recipe[], nextBoards: Board[]) => {
     try {
@@ -569,6 +624,26 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
     return () => window.removeEventListener('message', onMessage);
   }, [notify, recipes, runBatchExtraction]);
 
+  // Debounced cross-device state sync to /api/state (syncs meals, Made It, pantry & store across laptop & phone!)
+  useEffect(() => {
+    if (!stateHydratedRef.current) return;
+    const timer = setTimeout(() => {
+      fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedIds,
+          servingsOverride,
+          madeItIds: Array.from(madeItIds),
+          checkedKeys: Array.from(checkedKeys),
+          currentStore,
+          hidePantry,
+        }),
+      }).catch(() => {});
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [selectedIds, servingsOverride, madeItIds, checkedKeys, currentStore, hidePantry]);
+
   const handleForceExtractSkipped = useCallback(
     async (skippedRecipe: Recipe) => {
       notify(`Extracting "${skippedRecipe.title}"...`);
@@ -833,6 +908,15 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
 
           {/* Right Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {runtimeStatus.storageMode === 'postgres' && (
+              <span
+                title="Synced across your devices via Postgres"
+                className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-[#2D6A4F]/25 bg-[#F5F8F4] px-2.5 py-1 text-[11px] font-semibold text-[#2D6A4F]"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#2D6A4F]" />
+                Cloud Synced
+              </span>
+            )}
             {extracting && (
               <button
                 type="button"
