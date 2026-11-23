@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle2,
   ClipboardCopy,
+  Download,
   ExternalLink,
   ShoppingCart,
   SkipForward,
@@ -161,11 +162,11 @@ export function ShopAllModal({
                 </p>
                 <p className="mt-0.5 text-[11px] text-[#575049]">
                   {extensionReady
-                    ? `Companion Extension detected — automatically clicks Add for all ${remainingItems.length} items inside ${store.name}.`
-                    : 'Load the included chrome-extension folder in chrome://extensions to auto-click Add inside Tesco, Sainsbury’s, Ocado, or Asda.'}
+                    ? `Extension connected — automatically adds all ${remainingItems.length} items inside ${store.name}.`
+                    : 'Download our free Chrome extension to automatically add items to Tesco, Sainsbury’s, Ocado, or Asda.'}
                 </p>
               </div>
-              {extensionReady && (
+              {extensionReady ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -176,6 +177,15 @@ export function ShopAllModal({
                 >
                   Auto-Fill Trolley
                 </button>
+              ) : (
+                <a
+                  href="/downloads/pinterest2plate-extension.zip"
+                  download="pinterest2plate-extension.zip"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#D93B22]"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
               )}
             </div>
           )}

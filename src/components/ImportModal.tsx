@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Chrome,
+  Download,
   ExternalLink,
   Link2,
   Loader2,
@@ -173,10 +174,43 @@ export function ImportModal({
               </li>
             </ol>
 
-            {!extensionReady && (
-              <div className="rounded-xl border border-[#E8E1D7] bg-white px-3.5 py-2.5 text-[11px] text-[#6B645C] leading-relaxed">
-                <strong className="text-[#1C1917]">Need the extension?</strong> Open{' '}
-                <code className="rounded bg-[#FAF7F2] px-1 py-0.5 font-mono text-[#1C1917]">chrome://extensions</code>, turn on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and pick the <code className="rounded bg-[#FAF7F2] px-1 py-0.5 font-mono text-[#1C1917]">chrome-extension</code> folder.
+            {extensionReady ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-[#D3E3D9] bg-[#F5F8F4] px-3.5 py-2 text-[11px] text-[#2D6A4F]">
+                <span className="font-semibold">Chrome extension connected on this browser.</span>
+                <a
+                  href="/downloads/pinterest2plate-extension.zip"
+                  download="pinterest2plate-extension.zip"
+                  className="inline-flex items-center gap-1 font-bold underline hover:text-[#1C1917]"
+                >
+                  <Download className="h-3 w-3" />
+                  Download .zip
+                </a>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-[#E8E1D7] bg-white p-3.5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-bold text-[#1C1917]">
+                      Don&apos;t have the extension yet?
+                    </p>
+                    <p className="text-[11px] text-[#6B645C]">
+                      Download it free and add it to Chrome in 30 seconds.
+                    </p>
+                  </div>
+                  <a
+                    href="/downloads/pinterest2plate-extension.zip"
+                    download="pinterest2plate-extension.zip"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#D93B22]"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download Extension
+                  </a>
+                </div>
+                <p className="text-[11px] text-[#6B645C] leading-relaxed border-t border-[#F4EFE7] pt-2">
+                  <strong>Quick install:</strong> Unzip the download → open{' '}
+                  <code className="rounded bg-[#FAF7F2] px-1 py-0.5 font-mono text-[#1C1917]">chrome://extensions</code>{' '}
+                  → switch on <strong>Developer mode</strong> (top right) → click <strong>Load unpacked</strong> and choose the unzipped folder.
+                </p>
               </div>
             )}
           </div>
