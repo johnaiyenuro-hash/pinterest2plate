@@ -242,6 +242,44 @@ export function BasketPanel({
           </div>
         </div>
 
+        {/* Top Quick Actions (Always Visible Above the Ingredient List) */}
+        <div className="no-print border-b border-[#EFE8DF] bg-[#FCFBF8] px-5 py-3 space-y-2">
+          <button
+            type="button"
+            disabled={selectedRecipes.length === 0 || flatVisibleItems.length === 0}
+            onClick={() => setShopAllOpen(true)}
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${storeConfig.pillActiveClass}`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            <span>
+              Shop All ({remainingToBuyCount}) in {storeConfig.name}
+            </span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedRecipes.length === 0}
+              onClick={handleCopyWhatsApp}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-[#332E2A] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>Copy for WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={selectedRecipes.length === 0}
+              onClick={() => window.print()}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3.5 py-2 text-xs font-bold text-[#443E38] transition-colors hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Print shopping list"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span>Print</span>
+            </button>
+          </div>
+        </div>
+
         {/* Pantry Filter Bar */}
         <div className="flex items-center justify-between border-b border-[#EFE8DF] bg-[#F5F8F4] px-5 py-2.5 text-xs">
           <label className="flex cursor-pointer items-center gap-2 font-medium text-[#2D6A4F] select-none">
@@ -259,7 +297,7 @@ export function BasketPanel({
         </div>
 
         {/* Aisle List */}
-        <div className="thin-scroll max-h-[460px] overflow-y-auto p-5 space-y-5">
+        <div className="thin-scroll max-h-[520px] overflow-y-auto p-5 space-y-5">
           {selectedRecipes.length === 0 ? (
             <div className="py-12 text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FAF7F2] text-[#A89E91]">
@@ -355,44 +393,6 @@ export function BasketPanel({
               </div>
             ))
           )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="no-print border-t border-[#EFE8DF] bg-[#FCFBF8] p-4 space-y-2">
-          <button
-            type="button"
-            disabled={selectedRecipes.length === 0 || flatVisibleItems.length === 0}
-            onClick={() => setShopAllOpen(true)}
-            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${storeConfig.pillActiveClass}`}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            <span>
-              Shop All ({remainingToBuyCount}) in {storeConfig.name}
-            </span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={selectedRecipes.length === 0}
-              onClick={handleCopyWhatsApp}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#332E2A] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span>Copy for WhatsApp</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={selectedRecipes.length === 0}
-              onClick={() => window.print()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DED5C8] bg-white px-3.5 py-2 text-xs font-bold text-[#443E38] transition-colors hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Print shopping list"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span>Print</span>
-            </button>
-          </div>
         </div>
       </div>
 

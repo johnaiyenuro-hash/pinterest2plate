@@ -157,6 +157,8 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       setImportInitialUrl(importUrlParam);
       setImportOpen(true);
       window.history.replaceState({}, '', '/');
+    } else if (params.has('extImport')) {
+      window.history.replaceState({}, '', '/');
     }
     const pinterestParam = params.get('pinterest');
     if (pinterestParam === 'connected') {
@@ -866,7 +868,7 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
       </header>
 
       {/* Compact Editorial Intro + Controls Strip */}
-      <main className="mx-auto grid w-full max-w-[1380px] flex-1 grid-cols-1 items-start gap-7 px-4 py-6 sm:px-6 lg:grid-cols-12 lg:px-8">
+      <main className="mx-auto grid w-full max-w-[1380px] flex-1 grid-cols-1 items-start gap-7 px-4 pt-6 pb-24 sm:px-6 lg:grid-cols-12 lg:px-8 lg:pb-8">
         {/* LEFT COLUMN: Catalog (8 cols) */}
         <section className="no-print lg:col-span-8 space-y-5">
           {/* Compact Top Heading + Quick Pick */}
@@ -1153,6 +1155,34 @@ export function MealPlannerApp({ initialBoards, initialRecipes }: MealPlannerApp
           />
         </aside>
       </main>
+
+      {/* Mobile Floating Sticky Basket Bar */}
+      {selectedIds.length > 0 && !mobileBasketOpen && !activeRecipe && !importOpen && (
+        <div className="no-print fixed inset-x-4 bottom-4 z-40 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileBasketOpen(true)}
+            className="flex w-full items-center justify-between rounded-2xl bg-[#1C1917] px-4 py-3.5 text-white shadow-2xl"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#D93B22]">
+                <ShoppingBasket className="h-4 w-4 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold leading-tight">
+                  View Weekly Basket ({selectedIds.length} meal{selectedIds.length === 1 ? '' : 's'})
+                </p>
+                <p className="text-[11px] text-white/70 tabular-nums">
+                  {printBasket.totalIngredients} consolidated ingredients · {(STORES[currentStore] || STORES.tesco).name}
+                </p>
+              </div>
+            </div>
+            <span className="rounded-xl bg-white/15 px-3 py-1.5 text-xs font-bold">
+              Open
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Mobile Basket Slide-Up Sheet */}
       {mobileBasketOpen && (
