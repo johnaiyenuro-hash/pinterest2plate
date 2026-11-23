@@ -797,8 +797,8 @@ export function MealPlannerApp({
                   <span className="font-serif text-lg sm:text-xl font-bold tracking-tight text-[#1C1917]">
                     Pin<span className="text-[#D93B22]">2</span>Plate
                   </span>
-                  <span className="hidden sm:inline-flex items-center rounded-md bg-[#1C1917] px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-white">
-                    P2P
+                  <span className="hidden sm:inline-flex items-center rounded-full border border-[#1C1917] bg-white px-2 py-0.5 font-serif text-[10px] font-bold tracking-wide text-[#1C1917]">
+                    P<span className="text-[#D93B22]">2</span>P
                   </span>
                 </div>
                 <p className="hidden sm:block text-[11px] text-[#8A8177] mt-0.5">
