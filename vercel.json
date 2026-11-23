@@ -1,31 +1,11 @@
 {
-  "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": false,
-  "routes": [
-    {
-      "src": "/api/recipes",
-      "dest": "/api/recipes.js"
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/pins/extract/route.ts": {
+      "maxDuration": 60
     },
-    {
-      "src": "/api/import",
-      "dest": "/api/import.js"
-    },
-    {
-      "src": "/api/pinterest/boards",
-      "dest": "/api/pinterest/boards.js"
-    },
-    {
-      "src": "/api/pinterest/sync",
-      "dest": "/api/pinterest/sync.js"
-    },
-    {
-      "src": "/api/pinterest/callback",
-      "dest": "/api/pinterest/callback.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/$1"
+    "src/app/api/boards/discover/route.ts": {
+      "maxDuration": 30
     }
-  ]
+  }
 }

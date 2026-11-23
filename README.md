@@ -1,36 +1,32 @@
-# P!nterest2Plate (P2P)
+# P!nterest2Plate
 
-> **Stop collecting. Start cooking.**  
-> An app designed to turn saved Pinterest recipe pins into actionable meal plans and 1-click shoppable supermarket baskets across the UK's leading grocers (**Tesco, Sainsbury's, Asda, Aldi, and Lidl**).
+Turn Pinterest recipe **videos and images** into clear **step-by-step cooking plans** and consolidated **UK supermarket shopping baskets** (Tesco, Sainsbury's, Asda, Aldi, Lidl).
 
-## Features Built in Prototype
+## Key Features
+- **Pinterest Board & Pin Importer:** Paste any public Pinterest board URL, single pin URL (`pinterest.com/pin/...` or `pin.it/...`), recipe blog URL, drag the 1-click **Send to Plate** bookmarklet, or connect your Pinterest account via **OAuth v5** (for private & 500+ pin boards).
+- **Gemini Multimodal Extraction (`@google/genai`):**
+  - **Tier 0 (`gemini-decision-1`):** Automatically filters out non-recipe food infographics (like storage charts) into a reviewable *Skipped Pins* drawer.
+  - **Tier 1 (`schema.org/Recipe` + `gemini-3.5-flash-lite`):** Instant structured normalization for pins linking to recipe blogs.
+  - **Tier 2 (`gemini-4-hydrogen`):** Reads recipe infographic images, handwritten lists, and multi-slide carousels.
+  - **Tier 3 (`gemini-4-hydrogen` + Files API):** Watches cooking video pins (visuals, on-screen captions, and spoken audio) to output normalized UK ingredients and timestamped step-by-step plans.
+- **Interactive Cooking Mode:** Serving scaler, checkable ingredients, 1-click live kitchen timers with audio chime, distraction-free full-screen Cook Mode (Wake Lock + arrow keys), and inline recipe editing.
+- **Smart UK Supermarket Basket:** True unit-aware quantity summation (`125g + 60g → 185g`, `600g + 500g → 1.1kg`), aisle grouping, pantry staple memory, WhatsApp export, and direct search links across 5 UK supermarkets.
 
-1. **Board Sync & Ingestion:** Pre-connected to `@shalom_x/food` (with 650+ pins) and pre-loaded with decoded visual recipes (Honey Chipotle Sliders, Fondant Leeks, Cabbage Egg Stir-Fry, Korean Spinach, McDonald's Nuggets, Nigerian Jollof).
-2. **Anti-Fatigue Decision Engine:**
-   - Tap **"Pick 3 for Me"** to instantly generate a balanced weekly dinner rotation.
-   - Interactive selection cards with prep times, tags, and step-by-step instructions.
-3. **Smart Aisle Deduplication:**
-   - Consolidates ingredients across all chosen recipes (e.g., combines garlic across 3 dishes into one purchase).
-   - Groups items cleanly by UK supermarket aisle (Fresh Produce 🥬, Meat & Poultry 🍗, Dairy & Chilled 🧀, Bakery 🥖, Food Cupboard 🥫).
-4. **Interactive Pantry Memory:**
-   - Detects kitchen staples (flour, salt, oil, soy sauce).
-   - Tap to check off items you already own in your fridge/cupboard.
-   - Remembers your pantry in browser `localStorage`.
-   - **"Hide Pantry Staples"** toggle to only view what you actually need to buy.
-5. **UK Supermarket Deep-Linking (Tesco, Sainsbury's, Asda, Aldi, Lidl):**
-   - Seamlessly switch between stores.
-   - Direct 1-click **"Find in [Store]"** button beside every single ingredient.
-   - **"Open All Needed Items"** button to bulk-search missing items in your chosen supermarket.
-   - **"Copy for WhatsApp"** button for texting a formatted grocery checklist with emojis and quantities.
+## Local Development
 
-## How to Run
+```bash
+npm install
+cp .env.example .env.local
+# Add GEMINI_API_KEY in .env.local to enable video/image pin extraction
+npm run dev
+```
 
-1. Open a terminal in this directory:
-   ```bash
-   node server.js
-   ```
-   Or double-click `start.bat`.
-2. Open your browser at:
-   ```
-   http://localhost:3000
-   ```
+## Environment Variables
+
+| Variable | Required | Purpose |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | For extraction | Powers Gemini multimodal video & image recipe parsing |
+| `DATABASE_URL` | Optional | Postgres URL (Supabase / Neon / Vercel Postgres); falls back to local JSON + browser cache |
+| `PINTEREST_APP_ID` / `PINTEREST_APP_SECRET` | Optional | Enables Pinterest OAuth v5 for private & large boards |
+| `PINTEREST_REDIRECT_URI` | Optional | OAuth callback URL (`https://<domain>/api/pinterest/callback`) |
+| `SESSION_SECRET` | Optional | Secret used to encrypt OAuth session cookies |

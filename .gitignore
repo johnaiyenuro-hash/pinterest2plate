@@ -1,1 +1,18 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment
+.env
+.env*.local
+
+# Local runtime DB
+data/db.json
+
+# Misc
+.DS_Store
+*.log
 .vercel
