@@ -27,17 +27,24 @@ body {
   gap: 10px;
 }
 
-.logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: #D93B22;
-  color: #FFFFFF;
+.logo-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.short-badge {
+  font-style: normal;
+  font-size: 9px;
   font-weight: 800;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  letter-spacing: 0.05em;
+  background: #1C1917;
+  color: #FFFFFF;
+  padding: 2px 5px;
+  border-radius: 5px;
+  vertical-align: middle;
+  margin-left: 3px;
 }
 
 .header h1 {

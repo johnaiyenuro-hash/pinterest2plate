@@ -59,7 +59,7 @@ async function initPopup() {
       btnStartShop.textContent = `Fill ${shopStoreSelect.options[shopStoreSelect.selectedIndex].text} Trolley (${needed.length})`;
       btnStartShop.dataset.mode = 'start';
     } else {
-      basketSummary.textContent = 'Open P!nterest2Plate & select meals';
+      basketSummary.textContent = 'Open Pin2Plate & select meals';
       btnStartShop.disabled = true;
     }
 
@@ -109,7 +109,7 @@ btnCollectBoard.onclick = () => {
 
       showStatus(
         collectStatus,
-        `Collected ${res.sentCount} diverse pins (from ${res.scannedCount} scanned)! Opening P!nterest2Plate...`,
+        `Collected ${res.sentCount} diverse pins (from ${res.scannedCount} scanned)! Opening Pin2Plate...`,
       );
       chrome.runtime.sendMessage({
         type: 'P2P_SEND_PINS_TO_APP',

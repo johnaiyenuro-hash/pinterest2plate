@@ -2,7 +2,7 @@
   "name": "pinterest2plate",
   "version": "2.0.0",
   "private": true,
-  "description": "P!nterest2Plate — Turn Pinterest recipe videos & images into step-by-step cooking plans and UK supermarket baskets",
+  "description": "Pin2Plate (P2P) — Turn Pinterest recipe videos & images into step-by-step cooking plans and UK supermarket baskets",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

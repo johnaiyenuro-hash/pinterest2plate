@@ -82,7 +82,7 @@ export function BasketPanel({
     [flatVisibleItems, checkedKeys],
   );
 
-  // Keep the P!nterest2Plate Chrome Extension synced with the live consolidated basket
+  // Keep the Pin2Plate (P2P) Chrome Extension synced with the live consolidated basket
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.postMessage(
@@ -120,7 +120,7 @@ export function BasketPanel({
   const handleCopyWhatsApp = async () => {
     if (selectedRecipes.length === 0) return;
 
-    let text = `*P!nterest2Plate Weekly Shop*\n`;
+    let text = `*Pin2Plate (P2P) Weekly Shop*\n`;
     text += `Store: *${storeConfig.name}*\n`;
     text += `Meals: ${selectedRecipes.map((r) => r.title).join(', ')}\n\n`;
 

@@ -1,4 +1,4 @@
-// P!nterest2Plate Companion — UK Supermarket Trolley Assistant (Tesco, Sainsbury's, Ocado, Asda)
+// Pin2Plate (P2P) Companion — UK Supermarket Trolley Assistant (Tesco, Sainsbury's, Ocado, Asda)
 (() => {
   const HOST = window.location.hostname;
 
@@ -163,7 +163,7 @@
       <div style="background:#1C1917;color:#FAF7F2;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
         <div>
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#F97316;font-weight:800;">
-            P!nterest2Plate Trolley Assistant
+            Pin2Plate (P2P) Trolley Assistant
           </div>
           <div style="font-size:12px;font-weight:700;margin-top:2px;">
             Item ${session.currentIndex + 1} of ${total} · ${done} added

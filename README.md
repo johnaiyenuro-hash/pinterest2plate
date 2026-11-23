@@ -1,4 +1,4 @@
-# P!nterest2Plate
+# Pin2Plate (P2P)
 
 Turn Pinterest recipe **videos and images** into clear **step-by-step cooking plans** and consolidated **UK supermarket shopping baskets** (Tesco, Sainsbury's, Asda, Aldi, Lidl).
 

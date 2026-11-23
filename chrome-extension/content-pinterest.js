@@ -1,4 +1,4 @@
-// P!nterest2Plate Companion — Pinterest Auto-Scroll & Diverse Pin Collector
+// Pin2Plate (P2P) Companion — Pinterest Auto-Scroll & Diverse Pin Collector
 (() => {
   let cancelled = false;
   let overlayEl = null;
@@ -171,7 +171,7 @@
     for (let step = 1; step <= scrollSteps; step++) {
       if (cancelled) break;
       showOverlay(
-        `P!nterest2Plate: Scanned ${pinMap.size} pins (scroll ${step}/${scrollSteps})...`,
+        `Pin2Plate: Scanned ${pinMap.size} pins (scroll ${step}/${scrollSteps})...`,
         () => {
           cancelled = true;
         },

@@ -1,4 +1,4 @@
-// P!nterest2Plate Companion — Web App Bridge (pinterest-to-plate.vercel.app & localhost:3000)
+// Pin2Plate (P2P) Companion — Web App Bridge (pinterest-to-plate.vercel.app & localhost:3000)
 (() => {
   // Announce presence to the web app
   function announceExtension() {

@@ -16,7 +16,6 @@ import {
   ShoppingBasket,
   Sparkles,
   Square,
-  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { BasketPanel } from './BasketPanel';
@@ -786,14 +785,22 @@ export function MealPlannerApp({
         <div className="mx-auto flex h-15 sm:h-16 max-w-[1380px] items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
           {/* Brand + Desktop Board Switcher */}
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-[#D93B22] text-white shadow-sm">
-                <UtensilsCrossed className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
+            <div className="flex items-center gap-2.5 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="Pin2Plate logo"
+                className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 object-contain"
+              />
               <div className="leading-none">
-                <span className="font-serif text-lg sm:text-xl font-bold tracking-tight text-[#1C1917]">
-                  P!nterest<span className="text-[#D93B22]">2</span>Plate
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-serif text-lg sm:text-xl font-bold tracking-tight text-[#1C1917]">
+                    Pin<span className="text-[#D93B22]">2</span>Plate
+                  </span>
+                  <span className="hidden sm:inline-flex items-center rounded-md bg-[#1C1917] px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-white">
+                    P2P
+                  </span>
+                </div>
                 <p className="hidden sm:block text-[11px] text-[#8A8177] mt-0.5">
                   Saved pins to dinner plans &amp; shopping lists
                 </p>
@@ -1401,14 +1408,18 @@ export function MealPlannerApp({
 
       {/* Dedicated Ink-Friendly A4 Print Sheet (always prints cleanly regardless of viewport width) */}
       <section className="print-only p-2 text-[#111111]">
-        <div className="border-b-2 border-[#111111] pb-3 mb-5 flex items-baseline justify-between">
-          <div>
-            <h1 className="font-serif text-2xl font-bold">P!nterest2Plate — Weekly Shopping List</h1>
-            <p className="text-xs text-[#555555] mt-1">
-              Store: <strong>{(STORES[currentStore] || STORES.tesco).name}</strong> ·{' '}
-              {selectedRecipesForPrint.length} meal{selectedRecipesForPrint.length === 1 ? '' : 's'} ·{' '}
-              {hidePantry ? 'Pantry staples hidden' : 'Including pantry staples'}
-            </p>
+        <div className="border-b-2 border-[#111111] pb-3 mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Pin2Plate" className="h-10 w-10 object-contain" />
+            <div>
+              <h1 className="font-serif text-2xl font-bold">Pin2Plate — Weekly Shopping List</h1>
+              <p className="text-xs text-[#555555] mt-0.5">
+                Store: <strong>{(STORES[currentStore] || STORES.tesco).name}</strong> ·{' '}
+                {selectedRecipesForPrint.length} meal{selectedRecipesForPrint.length === 1 ? '' : 's'} ·{' '}
+                {hidePantry ? 'Pantry staples hidden' : 'Including pantry staples'}
+              </p>
+            </div>
           </div>
           <span className="text-xs text-[#555555]">
             {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}

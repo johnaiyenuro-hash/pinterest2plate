@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'P!nterest2Plate — From Saved Pins to Cooked Dinners',
+  title: 'Pin2Plate (P2P) — From Saved Pins to Cooked Dinners',
   description:
     'Turn Pinterest recipe videos and images into clear step-by-step cooking plans and consolidated UK supermarket baskets.',
 };

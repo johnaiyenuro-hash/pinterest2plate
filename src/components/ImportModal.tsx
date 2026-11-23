@@ -161,7 +161,7 @@ export function ImportModal({
                   2
                 </span>
                 <span>
-                  Click the <strong>P!nterest2Plate</strong> icon in your Chrome toolbar.
+                  Click the <strong>Pin2Plate (P2P)</strong> icon in your Chrome toolbar.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
@@ -178,8 +178,8 @@ export function ImportModal({
               <div className="flex items-center justify-between gap-2 rounded-xl border border-[#D3E3D9] bg-[#F5F8F4] px-3.5 py-2 text-[11px] text-[#2D6A4F]">
                 <span className="font-semibold">Chrome extension connected on this browser.</span>
                 <a
-                  href="/downloads/pinterest2plate-extension.zip"
-                  download="pinterest2plate-extension.zip"
+                  href="/downloads/pin2plate-extension.zip"
+                  download="pin2plate-extension.zip"
                   className="inline-flex items-center gap-1 font-bold underline hover:text-[#1C1917]"
                 >
                   <Download className="h-3 w-3" />
@@ -198,8 +198,8 @@ export function ImportModal({
                     </p>
                   </div>
                   <a
-                    href="/downloads/pinterest2plate-extension.zip"
-                    download="pinterest2plate-extension.zip"
+                    href="/downloads/pin2plate-extension.zip"
+                    download="pin2plate-extension.zip"
                     className="inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#D93B22]"
                   >
                     <Download className="h-3.5 w-3.5" />

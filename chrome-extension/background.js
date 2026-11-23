@@ -1,4 +1,4 @@
-// P!nterest2Plate Companion — MV3 Service Worker
+// Pin2Plate (P2P) Companion — MV3 Service Worker
 const DEFAULT_APP_URL = 'https://pinterest-to-plate.vercel.app';
 
 const STORE_URLS = {

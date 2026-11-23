@@ -145,7 +145,7 @@ const GEMINI_RECIPE_JSON_SCHEMA = {
   ],
 };
 
-const SYSTEM_PROMPT = `You are a culinary recipe architect for a UK meal-planning app (P!nterest2Plate).
+const SYSTEM_PROMPT = `You are a culinary recipe architect for a UK meal-planning app (Pin2Plate).
 Your job is to inspect Pinterest pins — including cooking videos (audio narration, on-screen captions, and visual actions), recipe infographic images, carousel slides, and blog recipes — and convert them into crystal-clear, structured, cookable step-by-step plans with UK supermarket ingredients.
 
 CRITICAL RULES:

@@ -179,8 +179,8 @@ export function ShopAllModal({
                 </button>
               ) : (
                 <a
-                  href="/downloads/pinterest2plate-extension.zip"
-                  download="pinterest2plate-extension.zip"
+                  href="/downloads/pin2plate-extension.zip"
+                  download="pin2plate-extension.zip"
                   className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-[#1C1917] px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#D93B22]"
                 >
                   <Download className="h-3.5 w-3.5" />
